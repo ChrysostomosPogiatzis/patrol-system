@@ -172,7 +172,7 @@ async function loadPatrolLogs() {
     }
 
     try {
-        const response = await axios.get(`/api/guard/patrols/${props.activePatrol.id}`);
+        const response = await axios.get(`/api/guard/patrols/${props.activePatrol.id}`, { timeout: 5000 });
         if (response.data && response.data.patrol && response.data.patrol.checkpoint_logs) {
             logs.value = response.data.patrol.checkpoint_logs;
             saveLogsCache();
