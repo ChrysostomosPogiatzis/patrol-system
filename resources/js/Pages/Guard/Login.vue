@@ -73,39 +73,6 @@ async function handleVerifyOtp() {
     }
 }
 
-// Handle numeric keypad press
-function handleKeyPress(num: string) {
-    errorMsg.value = null;
-    if (step.value === 'phone') {
-        phone.value += num;
-    } else {
-        if (otpCode.value.length < 6) {
-            otpCode.value += num;
-        }
-        if (otpCode.value.length === 6) {
-            handleVerifyOtp();
-        }
-    }
-}
-
-// Handle keypad backspace
-function handleBackspace() {
-    if (step.value === 'phone') {
-        phone.value = phone.value.slice(0, -1);
-    } else {
-        otpCode.value = otpCode.value.slice(0, -1);
-    }
-}
-
-// Clear input field
-function handleClear() {
-    if (step.value === 'phone') {
-        phone.value = '';
-    } else {
-        otpCode.value = '';
-    }
-}
-
 function handleOtpInputChange() {
     otpCode.value = otpCode.value.replace(/[^0-9]/g, '').slice(0, 6);
     errorMsg.value = null;
@@ -166,20 +133,6 @@ function handleOtpInputChange() {
 
                 <!-- STEP 1: Phone Number Mode -->
                 <div v-if="step === 'phone'">
-                    <!-- Demo Phone Autofill Helper -->
-                    <div class="mb-5 bg-slate-850/60 border border-slate-800/80 rounded-xl p-3 text-[11px] text-slate-300 flex items-center justify-between">
-                        <div>
-                            <span class="font-bold text-[9px] uppercase tracking-widest block text-indigo-400 mb-0.5 font-mono">Quick Testing Autofill</span>
-                            <span>Phone: <strong class="text-white font-mono ml-0.5">+35799123456</strong></span>
-                        </div>
-                        <button 
-                            @click="phone = '+35799123456'" 
-                            class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-3 py-1.5 rounded-lg text-[9px] uppercase tracking-wider transition-all shadow-md active:scale-95"
-                        >
-                            Fill
-                        </button>
-                    </div>
-
                     <label class="block text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-2">Phone Number</label>
                     <div class="relative mb-6">
                         <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -191,8 +144,9 @@ function handleOtpInputChange() {
                             v-model="phone" 
                             type="tel" 
                             class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-100 pl-10 pr-4 py-3.5 rounded-2xl text-lg font-bold font-mono tracking-wide focus:outline-none"
-                            placeholder="+35799123456"
+                            placeholder="+35797624744"
                         />
+                        <span class="block text-[8px] font-black text-slate-500 uppercase tracking-widest pl-1 mt-2.5 font-mono">Structure Example: +35797624744</span>
                     </div>
 
                     <button 
@@ -244,44 +198,6 @@ function handleOtpInputChange() {
                         <span v-else>Verify & Log In</span>
                     </button>
                 </div>
-            </div>
-
-            <!-- CUSTOM NUMERIC DIALPAD (Optimised for mobile touch input) -->
-            <div class="mt-8 grid grid-cols-3 gap-3.5 px-4 animate-fadeIn">
-                <button 
-                    v-for="num in ['1', '2', '3', '4', '5', '6', '7', '8', '9']" 
-                    :key="num"
-                    @click="handleKeyPress(num)"
-                    class="w-full aspect-square bg-slate-900/40 hover:bg-slate-900/80 active:bg-slate-800/80 border border-slate-900 text-slate-200 text-2xl font-bold rounded-2xl transition-all flex items-center justify-center shadow-md active:scale-95 touch-manipulation font-mono"
-                >
-                    {{ num }}
-                </button>
-                
-                <!-- Clear Button -->
-                <button 
-                    @click="handleClear"
-                    class="w-full aspect-square bg-slate-900/40 hover:bg-slate-900/80 active:bg-slate-800/80 border border-slate-900 text-slate-400 text-xs font-bold uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center active:scale-95 touch-manipulation"
-                >
-                    Clear
-                </button>
-
-                <!-- Zero -->
-                <button 
-                    @click="handleKeyPress('0')"
-                    class="w-full aspect-square bg-slate-900/40 hover:bg-slate-900/80 active:bg-slate-800/80 border border-slate-900 text-slate-200 text-2xl font-bold rounded-2xl transition-all flex items-center justify-center shadow-md active:scale-95 touch-manipulation font-mono"
-                >
-                    0
-                </button>
-
-                <!-- Backspace -->
-                <button 
-                    @click="handleBackspace"
-                    class="w-full aspect-square bg-slate-900/40 hover:bg-slate-900/80 active:bg-slate-800/80 border border-slate-900 text-slate-400 text-2xl rounded-2xl transition-all flex items-center justify-center active:scale-95 touch-manipulation"
-                >
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414A2 2 0 0010.828 19h7.344a2 2 0 002-2V7a2 2 0 00-2-2h-7.344a2 2 0 00-1.414.586L3 12z" />
-                    </svg>
-                </button>
             </div>
         </div>
     </div>
