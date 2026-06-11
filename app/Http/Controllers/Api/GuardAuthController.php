@@ -33,6 +33,18 @@ class GuardAuthController extends Controller
             ], 404);
         }
 
+        // Check company subscription
+        if ($guard->tenant) {
+            $isExpired = $guard->tenant->subscription_until && $guard->tenant->subscription_until->isPast();
+            $isInactive = !$guard->tenant->is_active;
+
+            if ($isInactive || $isExpired) {
+                return response()->json([
+                    'message' => 'Your company subscription has expired or is inactive. Access restricted.',
+                ], 403);
+            }
+        }
+
         // Enforce rate limiting: Max 2 OTP requests per 1 hour
         $cleanPhone = preg_replace('/[^0-9]/', '', $request->phone);
         $rateLimitKey = 'otp-request:' . $cleanPhone;
@@ -167,6 +179,18 @@ class GuardAuthController extends Controller
             return response()->json([
                 'message' => 'Guard account not found or inactive.',
             ], 404);
+        }
+
+        // Check company subscription
+        if ($guard->tenant) {
+            $isExpired = $guard->tenant->subscription_until && $guard->tenant->subscription_until->isPast();
+            $isInactive = !$guard->tenant->is_active;
+
+            if ($isInactive || $isExpired) {
+                return response()->json([
+                    'message' => 'Your company subscription has expired or is inactive. Access restricted.',
+                ], 403);
+            }
         }
 
         // Find the latest active OTP token

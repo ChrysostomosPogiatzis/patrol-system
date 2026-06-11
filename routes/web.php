@@ -16,9 +16,9 @@ Route::get('/', function () {
 
 Route::get('/dashboard', function () {
     return Inertia::render('Admin/Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+})->middleware(['auth', 'verified', 'subscription.active'])->name('dashboard');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware(['auth', 'verified', 'subscription.active'])->group(function () {
     Route::get('/admin/guards', function () {
         return Inertia::render('Admin/Guards');
     })->name('admin.guards');
@@ -48,7 +48,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('admin.superadmin');
 });
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'subscription.active'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

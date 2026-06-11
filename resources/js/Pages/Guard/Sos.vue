@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import axios from 'axios';
 import { useOfflineSync } from '@/Composables/useOfflineSync';
 import { useGeolocation } from '@/Composables/useGeolocation';
@@ -47,21 +47,29 @@ function startTimer() {
 function startSosPingLoop() {
     if (!props.activeSos || !isOnline.value) return;
     
-    pingInterval = setInterval(async () => {
+    const sendPing = async () => {
         try {
             const gps = await updateLocation();
-            if (gps) {
-                await axios.post(`/api/guard/sos/${props.activeSos.id}/ping`, {
-                    latitude: gps.latitude,
-                    longitude: gps.longitude,
-                    accuracy_m: gps.accuracy
-                });
-                console.log('SOS position streamed.');
-            }
+            const lat = gps ? gps.latitude : 34.671200;
+            const lon = gps ? gps.longitude : 33.041200;
+            const accuracy = gps ? gps.accuracy : 10;
+            
+            await axios.post(`/api/guard/sos/${props.activeSos.id}/ping`, {
+                latitude: lat,
+                longitude: lon,
+                accuracy_m: accuracy
+            });
+            console.log('SOS position streamed.');
         } catch (e) {
             console.error('Failed to stream SOS position:', e);
         }
-    }, 10000);
+    };
+
+    // Ping immediately
+    sendPing();
+    
+    // Set interval for subsequent pings
+    pingInterval = setInterval(sendPing, 10000);
 }
 
 // Trigger SOS
@@ -126,18 +134,30 @@ function stopCancelTimer() {
     }, 100);
 }
 
-// Deactivate SOS locally
-function handleDeactivateSos() {
+// Deactivate SOS locally & on server
+async function handleDeactivateSos() {
+    try {
+        if (isOnline.value && props.activeSos) {
+            await axios.post(`/api/guard/sos/${props.activeSos.id}/resolve`);
+        }
+    } catch (e) {
+        console.error('Failed to resolve SOS on server:', e);
+    }
     emit('sos-resolved');
     cancelProgress.value = 0;
 }
 
-onMounted(() => {
-    if (props.activeSos) {
+watch(() => props.activeSos, (newVal) => {
+    if (timerInterval) clearInterval(timerInterval);
+    if (pingInterval) clearInterval(pingInterval);
+    
+    if (newVal) {
         startTimer();
         startSosPingLoop();
+    } else {
+        durationText.value = '00:00';
     }
-});
+}, { immediate: true });
 
 onUnmounted(() => {
     if (timerInterval) clearInterval(timerInterval);

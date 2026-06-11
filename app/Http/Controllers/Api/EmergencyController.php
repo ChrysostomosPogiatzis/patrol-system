@@ -159,4 +159,33 @@ class EmergencyController extends Controller
             'message' => 'SOS location update logged.',
         ]);
     }
+
+    /**
+     * Resolve/Acknowledge an SOS alert by the guard.
+     */
+    public function resolveSos(Request $request, $id): JsonResponse
+    {
+        $guard = $request->user();
+
+        $sos = SosAlert::where('id', $id)
+            ->where('guard_id', $guard->id)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$sos) {
+            return response()->json([
+                'message' => 'Active SOS alert not found.',
+            ], 404);
+        }
+
+        $sos->update([
+            'status' => 'resolved',
+            'resolved_at' => now(),
+        ]);
+
+        return response()->json([
+            'message' => 'Emergency SOS alert resolved successfully.',
+            'sos_alert' => $sos,
+        ]);
+    }
 }

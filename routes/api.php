@@ -13,7 +13,7 @@ Route::prefix('guard')->group(function () {
     Route::post('/login', [GuardAuthController::class, 'login']);
 
     // Protected Guard routes
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'subscription.active'])->group(function () {
         Route::get('/me', [GuardAuthController::class, 'me']);
         Route::get('/routes', [PatrolController::class, 'routes']);
         
@@ -35,6 +35,7 @@ Route::prefix('guard')->group(function () {
         Route::post('/location/ping', [EmergencyController::class, 'pingLocation']);
         Route::post('/sos/trigger', [EmergencyController::class, 'triggerSos']);
         Route::post('/sos/{sos_alert}/ping', [EmergencyController::class, 'pingSosLocation']);
+        Route::post('/sos/{sos_alert}/resolve', [EmergencyController::class, 'resolveSos']);
         
         // Offline Synchronization Queue
         Route::post('/sync', [SyncController::class, 'syncQueue']);
