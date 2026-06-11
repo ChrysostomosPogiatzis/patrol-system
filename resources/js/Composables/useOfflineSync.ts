@@ -1,5 +1,6 @@
 import { ref, onMounted, onUnmounted, readonly } from 'vue';
 import axios from 'axios';
+import { Network } from '@capacitor/network';
 
 export interface QueueItem {
     entity_type: 'patrol_checkpoint_log' | 'incident' | 'checkpoint_media' | 'guard_location_ping';
@@ -8,7 +9,7 @@ export interface QueueItem {
     captured_at: string;
 }
 
-const isOnline = ref(typeof navigator !== 'undefined' ? navigator.onLine : true);
+const isOnline = ref(true);
 const queue = ref<QueueItem[]>([]);
 const isSyncing = ref(false);
 const lastSyncTime = ref<string | null>(null);
@@ -120,8 +121,10 @@ export function useOfflineSync() {
     }
 
     // Set up network listeners
-    const updateOnlineStatus = () => {
-        const nextState = navigator.onLine;
+    let networkListener: any = null;
+
+    const updateOnlineStatus = (status: boolean) => {
+        const nextState = status;
         const changed = isOnline.value !== nextState;
         isOnline.value = nextState;
         
@@ -131,15 +134,42 @@ export function useOfflineSync() {
         }
     };
 
-    onMounted(() => {
+    onMounted(async () => {
         loadQueue();
-        if (typeof window !== 'undefined') {
-            window.addEventListener('online', updateOnlineStatus);
-            window.addEventListener('offline', updateOnlineStatus);
-            // Sync on mount
-            if (isOnline.value && queue.value.length > 0) {
-                triggerSync();
+        
+        // Initialize status using Capacitor Network
+        try {
+            const status = await Network.getStatus();
+            isOnline.value = status.connected;
+        } catch (e) {
+            // Fallback to browser navigator
+            if (typeof navigator !== 'undefined') {
+                isOnline.value = navigator.onLine;
             }
+        }
+
+        // Listen for status changes
+        try {
+            networkListener = await Network.addListener('networkStatusChange', (status) => {
+                updateOnlineStatus(status.connected);
+            });
+        } catch (e) {
+            // Fallback to standard web listeners
+            if (typeof window !== 'undefined') {
+                window.addEventListener('online', () => updateOnlineStatus(true));
+                window.addEventListener('offline', () => updateOnlineStatus(false));
+            }
+        }
+
+        // Sync on mount if online
+        if (isOnline.value && queue.value.length > 0) {
+            triggerSync();
+        }
+    });
+
+    onUnmounted(() => {
+        if (networkListener) {
+            networkListener.remove();
         }
     });
 
