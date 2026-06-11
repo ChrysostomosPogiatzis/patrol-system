@@ -74,7 +74,7 @@ class GuardAuthController extends Controller
         $cleanPhoneSms = preg_replace('/[^0-9+]/', '', $request->phone);
 
         // Prepare message body
-        $message = "Your SENTINEL PATROL verification code is: {$otp}. Valid for 5 minutes.";
+        $message = "Your WITBO PATROL verification code is: {$otp}. Valid for 5 minutes.";
 
         // Dispatch real SMS
         $smsSent = $this->sendSms($cleanPhoneSms, $message);

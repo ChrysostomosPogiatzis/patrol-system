@@ -10,7 +10,7 @@ defineProps<{
 const isSidebarOpen = ref(true);
 const page = usePage();
 const user = page.props.auth.user as any;
-const tenantName = user.tenant?.name || 'Sentinel Control';
+const tenantName = user.tenant?.name || 'Witbo Control';
 
 const superadminTenants = computed(() => (page.props.auth as any).superadmin_tenants || []);
 const overrideTenantId = ref((page.props.auth as any).override_tenant_id || '');
@@ -105,7 +105,7 @@ async function handleTenantSwitch() {
                         </svg>
                     </div>
                     <div class="flex flex-col">
-                        <span class="text-xs font-black tracking-widest text-slate-900 font-mono leading-none">SENTINEL</span>
+                        <span class="text-xs font-black tracking-widest text-slate-900 font-mono leading-none">WITBO</span>
                         <span class="text-[8px] font-bold text-slate-450 tracking-wider uppercase font-mono mt-0.5">Control Panel</span>
                     </div>
                 </div>

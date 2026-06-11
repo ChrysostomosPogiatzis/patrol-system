@@ -29,8 +29,8 @@ class DatabaseSeeder extends Seeder
         // ==========================================
         User::create([
             'tenant_id' => null,
-            'name' => 'Sentinel Super Admin',
-            'email' => 'superadmin@sentinel.com',
+            'name' => 'Witbo Super Admin',
+            'email' => 'superadmin@witbo.com',
             'phone' => '+35799000000',
             'role' => 'superadmin',
             'password' => bcrypt('password'),
@@ -38,13 +38,13 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // ==========================================
-        // TENANT 1: Sentinel Security Ltd
+        // TENANT 1: Witbo Security Ltd
         // ==========================================
         $tenant1 = Tenant::create([
-            'name' => 'Sentinel Security Ltd',
-            'slug' => 'sentinel',
+            'name' => 'Witbo Security Ltd',
+            'slug' => 'witbo',
             'phone' => '+35725123456',
-            'email' => 'info@sentinelsecurity.com',
+            'email' => 'info@witbosecurity.com',
             'address' => 'Marina Road 10, Limassol, Cyprus',
             'timezone' => 'Asia/Nicosia',
             'subscription_plan' => 'enterprise',
@@ -54,8 +54,8 @@ class DatabaseSeeder extends Seeder
         // Admin User
         User::create([
             'tenant_id' => $tenant1->id,
-            'name' => 'Sentinel Admin',
-            'email' => 'admin@sentinel.com',
+            'name' => 'Witbo Admin',
+            'email' => 'admin@witbo.com',
             'phone' => '+35799000001',
             'role' => 'admin',
             'password' => bcrypt('password'),
@@ -259,7 +259,7 @@ class DatabaseSeeder extends Seeder
             'name' => 'Ops Director',
             'role_label' => 'Security Director',
             'phone' => '+35799887766',
-            'email' => 'ops@sentinelsecurity.com',
+            'email' => 'ops@witbosecurity.com',
             'notify_channels' => ['email', 'sms'],
             'notify_on' => ['patrol_completed', 'incident_created', 'sos_triggered'],
             'is_active' => true,

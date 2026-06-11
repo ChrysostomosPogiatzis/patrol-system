@@ -1011,7 +1011,7 @@ watch(activeTab, (newTab) => {
                     </div>
                     <div class="space-y-1">
                         <label class="block text-[10px] text-slate-400 uppercase">Email</label>
-                        <input v-model="contactForm.email" type="email" class="w-full bg-slate-950 border border-slate-850 p-2.5 rounded-xl text-slate-100 focus:outline-none" placeholder="supervisor@sentinel.com" />
+                        <input v-model="contactForm.email" type="email" class="w-full bg-slate-950 border border-slate-850 p-2.5 rounded-xl text-slate-100 focus:outline-none" placeholder="supervisor@witbo.com" />
                     </div>
                 </div>
 

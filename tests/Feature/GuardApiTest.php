@@ -37,8 +37,8 @@ class GuardApiTest extends TestCase
 
         // Setup base tenant and guard
         $this->tenant = Tenant::create([
-            'name' => 'SaaS Sentinel Corp',
-            'slug' => 'sentinel-corp',
+            'name' => 'SaaS Witbo Corp',
+            'slug' => 'witbo-corp',
         ]);
 
         $this->guard = Guard::create([
