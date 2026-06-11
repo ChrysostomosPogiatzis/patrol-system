@@ -60,7 +60,7 @@ async function loadHistory(page = 1) {
     error.value = null;
 
     try {
-        const res = await axios.get(`/api/guard/patrols/history?page=${page}`);
+        const res = await axios.get(`/api/guard/patrols/history?page=${page}`, { timeout: 5000 });
         if (page === 1) {
             patrols.value = res.data.data;
         } else {
@@ -81,7 +81,7 @@ async function openDetail(patrol: PatrolSummary) {
     selectedPatrol.value = null;
 
     try {
-        const res = await axios.get(`/api/guard/patrols/${patrol.id}`);
+        const res = await axios.get(`/api/guard/patrols/${patrol.id}`, { timeout: 5000 });
         selectedPatrol.value = res.data.patrol;
     } catch {
         error.value = 'Failed to load patrol details.';
