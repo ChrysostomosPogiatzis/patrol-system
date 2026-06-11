@@ -44,7 +44,6 @@ async function checkAuth() {
                             localStorage.setItem(`patrol_logs_${activePatrol.value.id}`, JSON.stringify(activePatrol.value.checkpoint_logs));
                         }
                         localStorage.setItem('patrol_active_session', JSON.stringify(activePatrol.value));
-                        startTracking(activePatrol.value.id);
                     } else {
                         // No active patrol on server — clear stale local cache
                         activePatrol.value = null;
@@ -55,9 +54,11 @@ async function checkAuth() {
                     const cachedPatrol = localStorage.getItem('patrol_active_session');
                     if (cachedPatrol) {
                         activePatrol.value = JSON.parse(cachedPatrol);
-                        startTracking(activePatrol.value.id);
                     }
                 }
+                
+                // Start tracking immediately (either on active patrol, or standby)
+                startTracking(activePatrol.value ? activePatrol.value.id : null);
                 
                 // Retrieve active SOS
                 const cachedSos = localStorage.getItem('patrol_active_sos');
@@ -86,6 +87,9 @@ async function checkAuth() {
                     if (cachedSos) {
                         activeSos.value = JSON.parse(cachedSos);
                     }
+                    
+                    // Start tracking immediately in offline mode
+                    startTracking(activePatrol.value ? activePatrol.value.id : null);
                 } else {
                     handleLogout();
                 }
@@ -105,6 +109,9 @@ function handleLoginSuccess(data: { token: string; guard: any }) {
     guardToken.value = data.token;
     guard.value = data.guard;
     axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
+    
+    // Start tracking immediately
+    startTracking(null);
     
     // Check if there are queued items from before, trigger sync
     triggerSync();
@@ -179,7 +186,8 @@ async function handleStartPatrol(routeId: number) {
 function handlePatrolCompleted() {
     activePatrol.value = null;
     localStorage.removeItem('patrol_active_session');
-    stopTracking();
+    // Keep tracking active but remove the patrol association
+    startTracking(null);
     currentTab.value = 'dashboard';
     
     // Trigger sync to dispatch final logs

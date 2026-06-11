@@ -1,4 +1,4 @@
-import { ref, onUnmounted } from 'vue';
+import { ref } from 'vue';
 import axios from 'axios';
 import { CapacitorBridge, GpsPosition } from '../Services/CapacitorBridge';
 import { useOfflineSync } from './useOfflineSync';
@@ -6,6 +6,7 @@ import { useOfflineSync } from './useOfflineSync';
 const currentPosition = ref<GpsPosition | null>(null);
 const batteryPct = ref<number | null>(null);
 const isTracking = ref(false);
+const activePatrolId = ref<number | null>(null);
 let trackingIntervalId: any = null;
 
 export function useGeolocation() {
@@ -14,12 +15,16 @@ export function useGeolocation() {
     // Fetch coordinates and battery status
     async function updateLocation(): Promise<GpsPosition | null> {
         try {
+            // Fetch battery info first so it is populated even if geolocation fails/times out
+            try {
+                const battery = await CapacitorBridge.getBatteryInfo();
+                batteryPct.value = battery.level;
+            } catch (batteryError) {
+                console.error('Failed to update battery level:', batteryError);
+            }
+
             const pos = await CapacitorBridge.getCurrentPosition();
             currentPosition.value = pos;
-
-            const battery = await CapacitorBridge.getBatteryInfo();
-            batteryPct.value = battery.level;
-
             return pos;
         } catch (error) {
             console.error('Failed to update location:', error);
@@ -28,7 +33,7 @@ export function useGeolocation() {
     }
 
     // Ping location to server or queue offline
-    async function pingLocation(patrolId: number | null = null): Promise<void> {
+    async function pingLocation(): Promise<void> {
         const pos = await updateLocation();
         if (!pos) return;
 
@@ -38,7 +43,7 @@ export function useGeolocation() {
             accuracy_m: pos.accuracy,
             battery_pct: batteryPct.value,
             is_online: isOnline.value,
-            patrol_id: patrolId
+            patrol_id: activePatrolId.value
         };
 
         if (isOnline.value) {
@@ -55,14 +60,19 @@ export function useGeolocation() {
 
     // Start background tracking interval (every 60 seconds)
     function startTracking(patrolId: number | null = null, intervalMs: number = 60000) {
-        if (isTracking.value) return;
+        activePatrolId.value = patrolId;
+        if (isTracking.value) {
+            // Already tracking, just trigger an immediate ping to sync status/battery
+            pingLocation();
+            return;
+        }
 
         isTracking.value = true;
         // Run first ping immediately
-        pingLocation(patrolId);
+        pingLocation();
 
         trackingIntervalId = setInterval(() => {
-            pingLocation(patrolId);
+            pingLocation();
         }, intervalMs);
     }
 
@@ -73,15 +83,18 @@ export function useGeolocation() {
             trackingIntervalId = null;
         }
         isTracking.value = false;
+        activePatrolId.value = null;
     }
 
     return {
         currentPosition,
         batteryPct,
         isTracking,
+        activePatrolId,
         updateLocation,
         pingLocation,
         startTracking,
         stopTracking
     };
 }
+
