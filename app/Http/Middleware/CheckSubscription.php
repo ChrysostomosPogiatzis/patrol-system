@@ -36,6 +36,7 @@ class CheckSubscription
                         // Allow access to subscription, profile, and auth routes
                         $allowedUrls = [
                             'admin/api/subscription',
+                            'admin/api/company',
                             'profile',
                             'logout',
                         ];

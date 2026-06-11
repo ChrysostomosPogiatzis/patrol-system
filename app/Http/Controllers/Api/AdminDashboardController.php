@@ -855,4 +855,38 @@ class AdminDashboardController extends Controller
             'plan' => $plan,
         ]);
     }
+
+    /**
+     * Update the current tenant's company details.
+     */
+    public function updateCompany(Request $request): JsonResponse
+    {
+        $tenantId = session('override_tenant_id') ?: Auth::user()->tenant_id;
+        if (!$tenantId) {
+            return response()->json([
+                'message' => 'No active company context.'
+            ], 400);
+        }
+
+        $tenant = \App\Models\Tenant::findOrFail($tenantId);
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'phone' => 'nullable|string|max:50',
+            'email' => 'nullable|email|max:255',
+            'address' => 'nullable|string|max:500',
+        ]);
+
+        $tenant->update([
+            'name' => $request->name,
+            'phone' => $request->phone,
+            'email' => $request->email,
+            'address' => $request->address,
+        ]);
+
+        return response()->json([
+            'message' => 'Company profile updated successfully.',
+            'tenant' => $tenant,
+        ]);
+    }
 }

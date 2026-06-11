@@ -47,16 +47,50 @@ const planDetails = ref<PlanDetails | null>(null);
 const usage = ref<Usage>({ guards_count: 0, locations_count: 0, checkpoints_count: 0 });
 const isLoading = ref(true);
 
+const form = ref({
+    name: '',
+    phone: '',
+    email: '',
+    address: ''
+});
+const isSaving = ref(false);
+const successMessage = ref<string | null>(null);
+const errorMessage = ref<string | null>(null);
+
 async function fetchSubscriptionData() {
     try {
         const res = await axios.get('/admin/api/subscription');
         tenant.value = res.data.tenant;
         planDetails.value = res.data.plan_details;
         usage.value = res.data.usage;
+        
+        if (res.data.tenant) {
+            form.value.name = res.data.tenant.name || '';
+            form.value.phone = res.data.tenant.phone || '';
+            form.value.email = res.data.tenant.email || '';
+            form.value.address = res.data.tenant.address || '';
+        }
     } catch (e) {
         console.error('Failed to load subscription data', e);
     } finally {
         isLoading.value = false;
+    }
+}
+
+async function saveCompanySettings() {
+    isSaving.value = true;
+    successMessage.value = null;
+    errorMessage.value = null;
+    try {
+        const res = await axios.put('/admin/api/company', form.value);
+        successMessage.value = res.data.message;
+        if (tenant.value) {
+            tenant.value.name = res.data.tenant.name;
+        }
+    } catch (e: any) {
+        errorMessage.value = e.response?.data?.message || 'Failed to save company settings.';
+    } finally {
+        isSaving.value = false;
     }
 }
 
@@ -198,6 +232,78 @@ function formatDate(dateStr: string | null): string {
                     </div>
                 </div>
             </div>
+
+            <!-- COMPANY PROFILE SETTINGS -->
+            <div class="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-sm space-y-6">
+                <div>
+                    <h3 class="text-xs font-black uppercase tracking-widest text-slate-800 font-mono">Company Profile Settings</h3>
+                    <p class="text-[11px] text-slate-400 mt-0.5">Manage your organization's general information and contact details.</p>
+                </div>
+
+                <form @submit.prevent="saveCompanySettings" class="space-y-4">
+                    <div v-if="successMessage" class="bg-emerald-50 border border-emerald-200 text-emerald-850 text-xs p-3 rounded-xl font-medium">
+                        {{ successMessage }}
+                    </div>
+                    <div v-if="errorMessage" class="bg-rose-50 border border-rose-200 text-rose-850 text-xs p-3 rounded-xl font-medium">
+                        {{ errorMessage }}
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-1.5">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Company Name</label>
+                            <input 
+                                v-model="form.name" 
+                                type="text" 
+                                required
+                                class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 p-3 rounded-xl text-xs focus:outline-none"
+                                placeholder="E.g. SaaS Sentinel Corp"
+                            />
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Contact Phone</label>
+                            <input 
+                                v-model="form.phone" 
+                                type="text" 
+                                class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 p-3 rounded-xl text-xs focus:outline-none"
+                                placeholder="E.g. +357 99 123456"
+                            />
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Contact Email</label>
+                            <input 
+                                v-model="form.email" 
+                                type="email" 
+                                class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 p-3 rounded-xl text-xs focus:outline-none"
+                                placeholder="E.g. admin@sentinel.com"
+                            />
+                        </div>
+
+                        <div class="space-y-1.5">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider pl-1">Office Address</label>
+                            <input 
+                                v-model="form.address" 
+                                type="text" 
+                                class="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 p-3 rounded-xl text-xs focus:outline-none"
+                                placeholder="E.g. 123 Spyrou Kyprianou Ave, Limassol"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <button 
+                            type="submit"
+                            :disabled="isSaving"
+                            class="bg-indigo-600 hover:bg-indigo-700 hover:scale-102 active:scale-98 text-white font-bold text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md flex items-center space-x-2"
+                        >
+                            <span v-if="isSaving" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                            <span>Save Settings</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
                        <!-- PLAN FEATURES INFO CAROUSEL/GRID -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div class="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-2">

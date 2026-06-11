@@ -94,6 +94,7 @@ Route::middleware(['auth', 'subscription.active'])->group(function () {
 
         // Subscription & Superadmin Management
         Route::get('/subscription', [\App\Http\Controllers\Api\AdminDashboardController::class, 'subscriptionData']);
+        Route::put('/company', [\App\Http\Controllers\Api\AdminDashboardController::class, 'updateCompany']);
         Route::get('/superadmin/tenants', [\App\Http\Controllers\Api\AdminDashboardController::class, 'listTenants']);
         Route::put('/superadmin/tenants/{id}/plan', [\App\Http\Controllers\Api\AdminDashboardController::class, 'updateTenantPlan']);
         Route::get('/superadmin/plans', [\App\Http\Controllers\Api\AdminDashboardController::class, 'listPlans']);
