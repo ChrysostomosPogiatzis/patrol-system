@@ -51,7 +51,7 @@ export function generateUUID(): string {
 }
 
 export function useOfflineSync() {
-    
+
     // Add item to offline queue
     function addToQueue(entityType: QueueItem['entity_type'], payload: any) {
         const item: QueueItem = {
@@ -60,10 +60,10 @@ export function useOfflineSync() {
             payload,
             captured_at: new Date().toISOString()
         };
-        
+
         queue.value.push(item);
         saveQueue();
-        
+
         // Try syncing immediately if online
         if (isOnline.value) {
             triggerSync();
@@ -83,7 +83,7 @@ export function useOfflineSync() {
             return true;
         }
         if (isSyncing.value) return false;
-        
+
         isSyncing.value = true;
         syncError.value = null;
 
@@ -100,12 +100,12 @@ export function useOfflineSync() {
 
             if (response.data && response.data.results) {
                 const results: Array<{ entity_id: string, status: string, error?: string }> = response.data.results;
-                
+
                 // Filter out successfully processed/acknowledged items (even if failed on backend processing)
                 const processedIds = new Set(results.map(r => r.entity_id));
                 queue.value = queue.value.filter(item => !processedIds.has(item.entity_id));
                 saveQueue();
-                
+
                 lastSyncTime.value = new Date().toLocaleTimeString();
                 isSyncing.value = false;
                 return true;
@@ -122,12 +122,37 @@ export function useOfflineSync() {
 
     // Set up network listeners
     let networkListener: any = null;
+    let pingInterval: any = null;
 
-    const updateOnlineStatus = (status: boolean) => {
-        const nextState = status;
+    // Helper to check actual internet availability
+    async function checkInternetAvailability(): Promise<boolean> {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+            
+            // Fetch a tiny asset with a cache-busting query parameter
+            await fetch(`/favicon.ico?_=${Date.now()}`, { 
+                method: 'HEAD', 
+                signal: controller.signal,
+                cache: 'no-store'
+            });
+            clearTimeout(timeoutId);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    const updateOnlineStatus = async (connected: boolean) => {
+        let actualOnline = false;
+        if (connected) {
+            actualOnline = await checkInternetAvailability();
+        }
+        
+        const nextState = actualOnline;
         const changed = isOnline.value !== nextState;
         isOnline.value = nextState;
-        
+
         if (changed && nextState) {
             console.log('Device returned online. Triggering sync...');
             triggerSync();
@@ -136,22 +161,22 @@ export function useOfflineSync() {
 
     onMounted(async () => {
         loadQueue();
-        
+
         // Initialize status using Capacitor Network
         try {
             const status = await Network.getStatus();
-            isOnline.value = status.connected;
+            await updateOnlineStatus(status.connected);
         } catch (e) {
             // Fallback to browser navigator
             if (typeof navigator !== 'undefined') {
-                isOnline.value = navigator.onLine;
+                await updateOnlineStatus(navigator.onLine);
             }
         }
 
         // Listen for status changes
         try {
-            networkListener = await Network.addListener('networkStatusChange', (status: any) => {
-                updateOnlineStatus(status.connected);
+            networkListener = await Network.addListener('networkStatusChange', async (status: any) => {
+                await updateOnlineStatus(status.connected);
             });
         } catch (e) {
             // Fallback to standard web listeners
@@ -160,6 +185,18 @@ export function useOfflineSync() {
                 window.addEventListener('offline', () => updateOnlineStatus(false));
             }
         }
+
+        // Periodically verify internet connectivity every 10 seconds
+        pingInterval = setInterval(async () => {
+            let connected = false;
+            try {
+                const status = await Network.getStatus();
+                connected = status.connected;
+            } catch (e) {
+                connected = typeof navigator !== 'undefined' ? navigator.onLine : false;
+            }
+            await updateOnlineStatus(connected);
+        }, 10000);
 
         // Sync on mount if online
         if (isOnline.value && queue.value.length > 0) {
@@ -170,6 +207,9 @@ export function useOfflineSync() {
     onUnmounted(() => {
         if (networkListener) {
             networkListener.remove();
+        }
+        if (pingInterval) {
+            clearInterval(pingInterval);
         }
     });
 
