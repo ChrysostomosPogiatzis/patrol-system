@@ -37,6 +37,11 @@ self.addEventListener('fetch', (event) => {
 
     const url = new URL(event.request.url);
     
+    // Only cache http/https protocols (ignore chrome-extension, data:, etc.)
+    if (!url.protocol.startsWith('http')) {
+        return;
+    }
+    
     // Do not cache API calls (these are handled by the app's custom offline sync queue)
     if (url.pathname.startsWith('/api/')) {
         return;
