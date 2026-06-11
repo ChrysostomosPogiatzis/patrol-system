@@ -143,6 +143,15 @@ function initSignature(canvas: HTMLCanvasElement | null) {
 }
 
 // Clear drawing area
+function isCanvasBlank(canvas: HTMLCanvasElement): boolean {
+    const context = canvas.getContext('2d');
+    if (!context) return true;
+    const buffer = new Uint32Array(
+        context.getImageData(0, 0, canvas.width, canvas.height).data.buffer
+    );
+    return !buffer.some(color => color !== 0);
+}
+
 function clearSignature(canvas: HTMLCanvasElement | null) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -273,13 +282,11 @@ async function startScan(method: 'qr' | 'nfc') {
     let sigData = null;
     if (activeLog.checkpoint.signature_required) {
         const canvas = sigCanvasRefs.value[activeLog.id];
-        if (canvas) {
-            sigData = canvas.toDataURL('image/png');
-            if (sigData.length < 1500) {
-                alert('Digital signature is required for this checkpoint.');
-                return;
-            }
+        if (!canvas || isCanvasBlank(canvas)) {
+            alert('Digital signature is required for this checkpoint.');
+            return;
         }
+        sigData = canvas.toDataURL('image/png');
     }
 
     currentSigData.value = sigData;
