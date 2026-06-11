@@ -128,7 +128,6 @@ async function handleTenantSwitch() {
 
                     <!-- Tab 2: Security Guards -->
                     <Link 
-                        v-if="user.role !== 'superadmin' || overrideTenantId"
                         :href="route('admin.guards')"
                         class="flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all min-h-[44px]"
                         :class="route().current('admin.guards') ? 'bg-indigo-50/70 border border-indigo-100 text-indigo-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent'"
@@ -141,7 +140,6 @@ async function handleTenantSwitch() {
 
                     <!-- Tab 3: Checkpoints & Sites -->
                     <Link 
-                        v-if="user.role !== 'superadmin' || overrideTenantId"
                         :href="route('admin.checkpoints')"
                         class="flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all min-h-[44px]"
                         :class="route().current('admin.checkpoints') ? 'bg-indigo-50/70 border border-indigo-100 text-indigo-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent'"
@@ -155,7 +153,6 @@ async function handleTenantSwitch() {
 
                     <!-- Tab 4: Patrol Routes -->
                     <Link 
-                        v-if="user.role !== 'superadmin' || overrideTenantId"
                         :href="route('admin.routes')"
                         class="flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all min-h-[44px]"
                         :class="route().current('admin.routes') ? 'bg-indigo-50/70 border border-indigo-100 text-indigo-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent'"
@@ -168,7 +165,6 @@ async function handleTenantSwitch() {
 
                     <!-- Tab 5: Alert Contacts -->
                     <Link 
-                        v-if="user.role !== 'superadmin' || overrideTenantId"
                         :href="route('admin.contacts')"
                         class="flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all min-h-[44px]"
                         :class="route().current('admin.contacts') ? 'bg-indigo-50/70 border border-indigo-100 text-indigo-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent'"
@@ -181,7 +177,6 @@ async function handleTenantSwitch() {
 
                     <!-- Tab 6: History Logs -->
                     <Link 
-                        v-if="user.role !== 'superadmin' || overrideTenantId"
                         :href="route('admin.history')"
                         class="flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all min-h-[44px]"
                         :class="route().current('admin.history') ? 'bg-indigo-50/70 border border-indigo-100 text-indigo-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent'"
@@ -190,6 +185,31 @@ async function handleTenantSwitch() {
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                         </svg>
                         <span>📜 History Logs</span>
+                    </Link>
+
+                    <!-- Tab 7: Subscription Plan -->
+                    <Link 
+                        :href="route('admin.subscription')"
+                        class="flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all min-h-[44px]"
+                        :class="route().current('admin.subscription') ? 'bg-indigo-50/70 border border-indigo-100 text-indigo-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent'"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                        </svg>
+                        <span>💳 Plan Quota</span>
+                    </Link>
+
+                    <!-- Tab 8: Superadmin Console -->
+                    <Link 
+                        v-if="user.role === 'superadmin'"
+                        :href="route('admin.superadmin')"
+                        class="flex items-center space-x-3 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all min-h-[44px]"
+                        :class="route().current('admin.superadmin') ? 'bg-indigo-50/70 border border-indigo-100 text-indigo-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-transparent'"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <span>👑 Superadmin Console</span>
                     </Link>
                 </nav>
             </aside>

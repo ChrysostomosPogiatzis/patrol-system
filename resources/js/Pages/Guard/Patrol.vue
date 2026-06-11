@@ -53,6 +53,7 @@ const { updateLocation } = useGeolocation();
 
 // Active states
 const logs = ref<CheckpointLog[]>([]);
+const routeDetails = ref<any>(props.activePatrol?.route || null);
 const currentLoadingId = ref<number | null>(null);
 const skipModalCheckpoint = ref<CheckpointLog | null>(null);
 const skipReason = ref('');
@@ -182,8 +183,13 @@ async function loadPatrolLogs() {
 
     try {
         const response = await axios.get(`/api/guard/patrols/${props.activePatrol.id}`, { timeout: 5000 });
-        if (response.data && response.data.patrol && response.data.patrol.checkpoint_logs) {
-            logs.value = response.data.patrol.checkpoint_logs;
+        if (response.data && response.data.patrol) {
+            if (response.data.patrol.checkpoint_logs) {
+                logs.value = response.data.patrol.checkpoint_logs;
+            }
+            if (response.data.patrol.route) {
+                routeDetails.value = response.data.patrol.route;
+            }
             saveLogsCache();
         } else {
             // fallback
@@ -213,10 +219,12 @@ function saveLogsCache() {
 // Watch active patrol session changes
 watch(() => props.activePatrol, (newVal) => {
     if (newVal) {
+        routeDetails.value = newVal.route || null;
         loadPatrolLogs();
         checkPatrolCompletion();
     } else {
         logs.value = [];
+        routeDetails.value = null;
     }
 }, { immediate: true, deep: true });
 
@@ -238,7 +246,7 @@ function checkPatrolCompletion() {
 
 // Helper to check if a checkpoint log is locked based on strict order enforcement
 function isCheckpointLocked(log: CheckpointLog): boolean {
-    if (!props.activePatrol || !props.activePatrol.route?.enforce_order) {
+    if (!props.activePatrol || !routeDetails.value?.enforce_order) {
         return false;
     }
     // Find the first pending position
@@ -845,8 +853,8 @@ onMounted(() => {
       <!-- Patrol Route Info Bar -->
       <div class="bg-slate-900 border border-slate-850 rounded-2xl p-4 flex justify-between items-center">
         <div>
-          <h3 class="text-sm font-bold text-slate-100">{{ activePatrol.route?.name || 'Port Security Shift' }}</h3>
-          <p class="text-[10px] text-slate-500 mt-0.5">Enforced Order: {{ activePatrol.route?.enforce_order ? 'Strict Sequential' : 'Flexible' }}</p>
+          <h3 class="text-sm font-bold text-slate-100">{{ routeDetails?.name || activePatrol.route?.name || 'Port Security Shift' }}</h3>
+          <p class="text-[10px] text-slate-500 mt-0.5">Enforced Order: {{ routeDetails?.enforce_order ? 'Strict Sequential' : 'Flexible' }}</p>
         </div>
         <div class="text-right">
           <span class="text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-1 rounded-lg">
@@ -935,7 +943,7 @@ onMounted(() => {
                 </span>
                 <!-- Skip Button -->
                 <button 
-                  v-else-if="log.status === 'pending' && activePatrol.route?.allow_skip" 
+                  v-else-if="log.status === 'pending' && routeDetails?.allow_skip" 
                   @click="skipModalCheckpoint = log"
                   class="text-[10px] text-amber-500 hover:text-amber-400 font-bold uppercase tracking-wider bg-amber-500/5 px-2.5 py-1 rounded-lg border border-amber-500/10 active:scale-95"
                 >

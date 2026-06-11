@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 
@@ -15,11 +15,21 @@ interface Contact {
     email?: string;
     notify_channels: string[];
     notify_on: string[];
+    tenant?: {
+        id: number;
+        name: string;
+    };
 }
 
 const contacts = ref<Contact[]>([]);
 const showAddContactModal = ref(false);
 const editingContact = ref<Contact | null>(null);
+
+const page = usePage();
+const isAllCompaniesMode = computed(() => {
+    const user = page.props.auth.user as any;
+    return user.role === 'superadmin' && !(page.props.auth as any).override_tenant_id;
+});
 
 const searchQuery = ref('');
 const sortBy = ref('name'); // name, role
@@ -40,11 +50,13 @@ function openAddContact() {
 }
 
 function openEditContact(contact: Contact) {
+    if (isAllCompaniesMode.value) return;
     editingContact.value = contact;
     showAddContactModal.value = true;
 }
 
 async function deleteContact(id: number) {
+    if (isAllCompaniesMode.value) return;
     if (!confirm('Are you sure you want to delete this alert contact?')) return;
     try {
         await axios.delete(`/admin/api/contacts/${id}`);
@@ -122,12 +134,21 @@ onMounted(() => {
 
     <AdminLayout title="Alert Contacts Directory">
         <div class="space-y-4">
+            <!-- Context warning banner -->
+            <div v-if="isAllCompaniesMode" class="bg-indigo-50 border border-indigo-150 p-4 rounded-2xl flex items-center gap-3 text-xs text-indigo-750 font-medium">
+                <span class="text-base">ℹ</span>
+                <span>You are viewing alert contacts across <strong>all companies</strong>. To register new contacts or edit alert notifications configurations, please select a specific company context from the dropdown at the top.</span>
+            </div>
+
             <!-- Header actions -->
             <div class="flex justify-between items-center">
                 <span class="text-xs text-slate-500 font-black uppercase tracking-widest font-mono">Emergency Alert Recipients ({{ filteredAndSortedContacts.length }})</span>
                 <button 
                     @click="openAddContact"
-                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center space-x-2 min-h-[48px]"
+                    :disabled="isAllCompaniesMode"
+                    class="text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md flex items-center space-x-2 min-h-[48px]"
+                    :class="isAllCompaniesMode ? 'bg-slate-350 cursor-not-allowed opacity-60' : 'bg-indigo-600 hover:bg-indigo-500 active:scale-95'"
+                    :title="isAllCompaniesMode ? 'Select a company context to add alert recipients' : ''"
                 >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -175,7 +196,10 @@ onMounted(() => {
                 >
                     <div class="space-y-4">
                         <div>
-                            <h4 class="text-xs font-black text-slate-800 font-mono group-hover:text-indigo-600 transition-colors">{{ c.name }}</h4>
+                            <h4 class="text-xs font-black text-slate-800 font-mono group-hover:text-indigo-600 transition-colors flex items-center gap-2 flex-wrap">
+                                <span>{{ c.name }}</span>
+                                <span v-if="isAllCompaniesMode" class="text-[9px] font-bold text-slate-450 uppercase bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded font-sans normal-case">{{ c.tenant?.name || 'System' }}</span>
+                            </h4>
                             <span class="text-[9px] font-black uppercase tracking-wider text-indigo-600 block mt-1">{{ c.role_label }}</span>
                         </div>
 
@@ -210,13 +234,19 @@ onMounted(() => {
                     <div class="flex justify-end space-x-2 pt-3 mt-4 border-t border-slate-150/60">
                         <button 
                             @click="openEditContact(c)"
-                            class="bg-indigo-50 hover:bg-indigo-100 text-indigo-650 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase font-mono tracking-wider border border-indigo-100/60 active:scale-95 transition-all"
+                            :disabled="isAllCompaniesMode"
+                            class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase font-mono tracking-wider border active:scale-95 transition-all"
+                            :class="isAllCompaniesMode ? 'bg-slate-50 border-slate-150 text-slate-400 cursor-not-allowed' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-650 border-indigo-100/60'"
+                            :title="isAllCompaniesMode ? 'Select a company to edit contact details' : ''"
                         >
                             Edit
                         </button>
                         <button 
                             @click="deleteContact(c.id)"
-                            class="bg-red-50 hover:bg-red-100 text-red-650 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase font-mono tracking-wider border border-red-100/60 active:scale-95 transition-all"
+                            :disabled="isAllCompaniesMode"
+                            class="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase font-mono tracking-wider border active:scale-95 transition-all"
+                            :class="isAllCompaniesMode ? 'bg-slate-50 border-slate-150 text-slate-400 cursor-not-allowed' : 'bg-red-50 hover:bg-red-100 text-red-650 border-red-100/60'"
+                            :title="isAllCompaniesMode ? 'Select a company to delete contacts' : ''"
                         >
                             Delete
                         </button>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import { Head } from '@inertiajs/vue3';
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted, watch } from 'vue';
 import axios from 'axios';
 
 interface Guard {
@@ -42,9 +42,13 @@ interface CheckpointLog {
     skipped_at?: string;
     skip_reason?: string;
     note?: string;
+    gps_within_fence?: boolean;
+    gps_distance_metres?: number | null;
     checkpoint: {
         name: string;
         description: string;
+        latitude?: number | string;
+        longitude?: number | string;
     };
     media?: Array<{
         id: number;
@@ -68,6 +72,11 @@ interface Patrol {
     security_guard?: Guard;
     incidents?: Incident[];
     checkpoint_logs?: CheckpointLog[];
+    location_pings?: Array<{
+        latitude: number | string;
+        longitude: number | string;
+        pinged_at: string;
+    }>;
     tenant?: { name: string };
 }
 
@@ -84,6 +93,136 @@ const isLoading = ref<boolean>(false);
 
 // Detail Modal state
 const selectedPatrolDetails = ref<Patrol | null>(null);
+
+let historyMapInstance: any = null;
+
+function loadLeaflet(): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if ((window as any).L) {
+            resolve();
+            return;
+        }
+
+        // CSS
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+
+        // JS
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Leaflet library failed to load.'));
+        document.head.appendChild(script);
+    });
+}
+
+function initHistoryMap(patrol: Patrol) {
+    const L = (window as any).L;
+    if (!L) return;
+
+    const mapEl = document.getElementById('history-patrol-map');
+    if (!mapEl) return;
+
+    if (historyMapInstance) {
+        historyMapInstance.remove();
+        historyMapInstance = null;
+    }
+
+    // Default center Cyprus
+    let centerLat = 34.6786;
+    let centerLon = 33.0413;
+    let zoomLevel = 13;
+
+    // Check if there are location pings to center the map
+    const pings = patrol.location_pings || [];
+    if (pings.length > 0) {
+        centerLat = Number(pings[0].latitude);
+        centerLon = Number(pings[0].longitude);
+        zoomLevel = 15;
+    } else if (patrol.checkpoint_logs && patrol.checkpoint_logs.length > 0) {
+        const firstWithCoords = patrol.checkpoint_logs.find(log => log.checkpoint?.latitude && log.checkpoint?.longitude);
+        if (firstWithCoords) {
+            centerLat = Number(firstWithCoords.checkpoint.latitude);
+            centerLon = Number(firstWithCoords.checkpoint.longitude);
+            zoomLevel = 15;
+        }
+    }
+
+    historyMapInstance = L.map('history-patrol-map', {
+        center: [centerLat, centerLon],
+        zoom: zoomLevel,
+        zoomControl: true
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20
+    }).addTo(historyMapInstance);
+
+    const markersGroup = L.layerGroup().addTo(historyMapInstance);
+
+    // Draw checkpoint markers
+    if (patrol.checkpoint_logs && patrol.checkpoint_logs.length > 0) {
+        patrol.checkpoint_logs.forEach(log => {
+            if (log.checkpoint?.latitude && log.checkpoint?.longitude) {
+                const lat = Number(log.checkpoint.latitude);
+                const lon = Number(log.checkpoint.longitude);
+                
+                // Color based on status: scanned = green, skipped = yellow, pending/other = blue
+                const color = log.status === 'scanned' ? '#10b981' : (log.status === 'skipped' ? '#f59e0b' : '#3b82f6');
+
+                L.circleMarker([lat, lon], {
+                    radius: 6,
+                    color: color,
+                    fillColor: '#ffffff',
+                    fillOpacity: 1,
+                    weight: 2
+                })
+                .bindTooltip(`${log.checkpoint.name} (${log.status})`, {
+                    permanent: false,
+                    direction: 'top',
+                    className: 'font-mono text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-slate-200'
+                })
+                .addTo(markersGroup);
+            }
+        });
+    }
+
+    // Draw GPS Polyline
+    if (pings.length > 0) {
+        const coords = pings.map(p => [Number(p.latitude), Number(p.longitude)]);
+        L.polyline(coords, {
+            color: '#ec4899', // Pink 500
+            weight: 3.5,
+            opacity: 0.85
+        }).addTo(historyMapInstance);
+
+        // Zoom map to fit the polyline/bounds of pings
+        try {
+            const bounds = L.latLngBounds(coords);
+            historyMapInstance.fitBounds(bounds, { padding: [20, 20] });
+        } catch (e) {
+            console.error('Failed to fit bounds:', e);
+        }
+    }
+}
+
+watch(selectedPatrolDetails, async (newVal) => {
+    if (newVal) {
+        await loadLeaflet();
+        setTimeout(() => {
+            initHistoryMap(newVal);
+        }, 150);
+    } else {
+        if (historyMapInstance) {
+            historyMapInstance.remove();
+            historyMapInstance = null;
+        }
+    }
+});
 
 async function fetchHistory() {
     isLoading.value = true;
@@ -111,6 +250,13 @@ watch([selectedGuard, selectedTimeframe], () => {
 
 onMounted(() => {
     fetchHistory();
+});
+
+onUnmounted(() => {
+    if (historyMapInstance) {
+        historyMapInstance.remove();
+        historyMapInstance = null;
+    }
 });
 
 function formatDuration(seconds?: number): string {
@@ -432,6 +578,12 @@ function getPriorityClass(priority: string) {
 
                 <!-- Scrollable Body -->
                 <div class="flex-1 p-6 overflow-y-auto space-y-6">
+                    <!-- GPS Route Map -->
+                    <div class="space-y-2">
+                        <span class="block text-[9px] font-black uppercase tracking-widest text-slate-450 font-mono">Patrol GPS Route Map</span>
+                        <div id="history-patrol-map" class="w-full h-[220px] rounded-2xl overflow-hidden border border-slate-200/80 bg-slate-50 z-10"></div>
+                    </div>
+
                     <!-- Checkpoints Checklist Sequence -->
                     <div class="space-y-3">
                         <span class="block text-[9px] font-black uppercase tracking-widest text-slate-450 font-mono">Scanned Checklist Status</span>
@@ -458,9 +610,19 @@ function getPriorityClass(priority: string) {
                                 </div>
                                 <p class="text-[10px] text-slate-500">{{ log.checkpoint?.description }}</p>
                                 
-                                <!-- Scanned At -->
-                                <div v-if="log.scanned_at" class="text-[9px] text-slate-400 font-mono">
-                                    Scanned At: {{ formatDate(log.scanned_at) }}
+                                <!-- Scanned / Skipped Time -->
+                                <div v-if="log.status === 'scanned'" class="text-[9px] text-slate-400 font-mono">
+                                    Scanned At: {{ formatDate(log.scanned_at || (log as any).updated_at || (log as any).created_at) }}
+                                </div>
+                                <!-- Geofence warning -->
+                                <div v-if="log.status === 'scanned' && log.gps_within_fence === false" class="bg-red-50 border border-red-200 text-red-650 px-2 py-1 rounded-md text-[9px] font-bold mt-1 inline-flex items-center gap-1">
+                                    <span>⚠️ Geofence Breach</span>
+                                    <span v-if="log.gps_distance_metres !== null && log.gps_distance_metres !== undefined">
+                                        ({{ Math.round(log.gps_distance_metres) }}m away)
+                                    </span>
+                                </div>
+                                <div v-else-if="log.status === 'skipped'" class="text-[9px] text-slate-400 font-mono">
+                                    Skipped At: {{ formatDate(log.skipped_at || (log as any).updated_at || (log as any).created_at) }}
                                 </div>
                                 <!-- Skip Details -->
                                 <div v-if="log.status === 'skipped'" class="space-y-1 border-t border-amber-200/40 pt-1.5 mt-1">
@@ -473,17 +635,35 @@ function getPriorityClass(priority: string) {
                                     <p class="text-[10px] text-slate-650">{{ log.note }}</p>
                                 </div>
                                 <!-- Scanned Photo / Media -->
-                                <div v-if="log.media && log.media.length > 0" class="space-y-1.5 border-t border-slate-200/50 pt-1.5 mt-1">
+                                <div v-if="log.media && log.media.filter(m => m.kind !== 'signature').length > 0" class="space-y-1.5 border-t border-slate-200/50 pt-1.5 mt-1">
                                     <span class="block text-[8px] font-black uppercase tracking-wider text-slate-450 font-mono">Scanned Photos:</span>
                                     <div class="flex flex-wrap gap-2 mt-1">
                                         <a 
-                                            v-for="m in log.media" 
+                                            v-for="m in log.media.filter(m => m.kind !== 'signature')" 
                                             :key="m.id" 
                                             :href="m.file_url"
                                             target="_blank"
                                             class="w-20 h-20 border border-slate-200 rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity"
                                         >
                                             <img :src="m.file_url" alt="Checkpoint media" class="object-cover w-full h-full" />
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <!-- Checkpoint Signature -->
+                                <div v-if="log.media && log.media.find(m => m.kind === 'signature')" class="space-y-1.5 border-t border-slate-200/50 pt-1.5 mt-1">
+                                    <span class="block text-[8px] font-black uppercase tracking-wider text-slate-450 font-mono">Checkpoint Signature:</span>
+                                    <div class="mt-1">
+                                        <a 
+                                            :href="log.media.find(m => m.kind === 'signature')?.file_url" 
+                                            target="_blank"
+                                            class="inline-block border border-slate-200 rounded-xl overflow-hidden bg-slate-100 p-2 hover:opacity-95 transition-opacity"
+                                        >
+                                            <img 
+                                                :src="log.media.find(m => m.kind === 'signature')?.file_url" 
+                                                alt="Checkpoint Signature" 
+                                                class="max-h-[60px] max-w-[180px] object-contain"
+                                            />
                                         </a>
                                     </div>
                                 </div>

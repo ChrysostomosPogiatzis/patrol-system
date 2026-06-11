@@ -5,6 +5,8 @@ interface Checkpoint {
     id: number;
     name: string;
     description: string;
+    latitude?: string | number;
+    longitude?: string | number;
 }
 
 interface Location {
@@ -25,6 +27,7 @@ interface Guard {
 
 interface GuardLocationPing {
     id: number;
+    guard_id: number;
     latitude: string | number;
     longitude: string | number;
     is_online: boolean;
@@ -36,15 +39,18 @@ interface GuardLocationPing {
 const props = defineProps<{
     locations: Location[];
     guardLocations: GuardLocationPing[];
+    guardPings24h: GuardLocationPing[];
 }>();
 
 const mapContainer = ref<HTMLDivElement | null>(null);
 const isMapLoaded = ref(false);
 const loadError = ref<string | null>(null);
+const selectedGuardId = ref<number | null>(null);
 
 let mapInstance: any = null;
 let markersLayerGroup: any = null;
 let geofenceLayerGroup: any = null;
+let polylineLayerGroup: any = null;
 
 function loadLeaflet(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -102,17 +108,24 @@ function initMap() {
 
     markersLayerGroup = L.layerGroup().addTo(mapInstance);
     geofenceLayerGroup = L.layerGroup().addTo(mapInstance);
+    polylineLayerGroup = L.layerGroup().addTo(mapInstance);
 
+    renderLayers();
+}
+
+function clearGuardSelection() {
+    selectedGuardId.value = null;
     renderLayers();
 }
 
 function renderLayers() {
     const L = (window as any).L;
-    if (!L || !mapInstance || !markersLayerGroup || !geofenceLayerGroup) return;
+    if (!L || !mapInstance || !markersLayerGroup || !geofenceLayerGroup || !polylineLayerGroup) return;
 
     // Clear existing
     markersLayerGroup.clearLayers();
     geofenceLayerGroup.clearLayers();
+    polylineLayerGroup.clearLayers();
 
     // 1. Draw Location Pins and Geofences
     props.locations.forEach(loc => {
@@ -129,6 +142,30 @@ function renderLayers() {
             radius: loc.geofence_radius || 50,
             weight: 1.5
         }).addTo(geofenceLayerGroup);
+
+        // Draw Site Checkpoints
+        if (loc.checkpoints && loc.checkpoints.length > 0) {
+            loc.checkpoints.forEach(cp => {
+                if (!cp.latitude || !cp.longitude) return;
+                const cpLat = Number(cp.latitude);
+                const cpLon = Number(cp.longitude);
+
+                // Small circle marker representing a checkpoint
+                L.circleMarker([cpLat, cpLon], {
+                    radius: 5,
+                    color: '#6366f1', // Indigo 500
+                    fillColor: '#ffffff',
+                    fillOpacity: 1,
+                    weight: 2
+                })
+                .bindTooltip(cp.name, {
+                    permanent: false,
+                    direction: 'top',
+                    className: 'font-mono text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-slate-200'
+                })
+                .addTo(markersLayerGroup);
+            });
+        }
 
         // Site Marker Icon (pure HTML/CSS)
         const siteIconHtml = `
@@ -151,7 +188,7 @@ function renderLayers() {
         if (loc.checkpoints && loc.checkpoints.length > 0) {
             checkpointsHtml = `
                 <div class="mt-2.5 pt-2.5 border-t border-slate-100">
-                    <span class="block text-[9px] font-black uppercase tracking-wider text-slate-400 font-mono mb-1.5">Checkpoints (${loc.checkpoints.length})</span>
+                    <span class="block text-[9px] font-black uppercase tracking-wider text-slate-440 font-mono mb-1.5">Checkpoints (${loc.checkpoints.length})</span>
                     <ul class="space-y-1 pl-0 list-none m-0">
                         ${loc.checkpoints.map(cp => `
                             <li class="text-[10px] text-slate-650 flex items-center gap-1.5 font-bold">
@@ -198,7 +235,7 @@ function renderLayers() {
             : '';
 
         const guardIconHtml = `
-            <div class="relative flex items-center justify-center w-8 h-8 rounded-full bg-white border-2 border-slate-800 shadow-lg">
+            <div class="relative flex items-center justify-center w-8 h-8 rounded-full bg-white border-2 border-slate-800 shadow-lg cursor-pointer">
                 ${pulseEffectHtml}
                 <div class="w-6 h-6 rounded-full ${statusColorClass} flex items-center justify-center text-white text-[9px] font-black font-mono">
                     ${ping.security_guard?.full_name ? ping.security_guard.full_name.slice(0, 2).toUpperCase() : 'GD'}
@@ -234,20 +271,54 @@ function renderLayers() {
                     </div>
                     <div class="flex justify-between">
                         <span class="text-slate-400 font-mono text-[9px] uppercase font-black">Last Ping:</span>
-                        <span class="font-bold font-mono text-slate-600">${lastSeenDate}</span>
+                        <span class="font-bold font-mono text-slate-650">${lastSeenDate}</span>
                     </div>
                 </div>
             </div>
         `;
 
-        L.marker([lat, lon], { icon: guardIcon })
+        const marker = L.marker([lat, lon], { icon: guardIcon })
             .bindPopup(popupContent)
             .addTo(markersLayerGroup);
+
+        marker.on('click', () => {
+            selectedGuardId.value = ping.guard_id;
+            renderLayers();
+        });
     });
+
+    // 3. Draw Selected Guard's Movement Path (last 24 hours)
+    if (selectedGuardId.value) {
+        const pings = props.guardPings24h.filter(ping => ping.guard_id === selectedGuardId.value);
+        if (pings.length > 0) {
+            const coordinates = pings.map(p => [Number(p.latitude), Number(p.longitude)]);
+            L.polyline(coordinates, {
+                color: '#ec4899', // Pink 500
+                weight: 3,
+                opacity: 0.85,
+                dashArray: '5, 5'
+            }).addTo(polylineLayerGroup);
+
+            // Also draw small starting/ending markers or dots along the path
+            pings.forEach((p, idx) => {
+                if (idx === 0 || idx === pings.length - 1) {
+                    L.circleMarker([Number(p.latitude), Number(p.longitude)], {
+                        radius: 4,
+                        color: idx === 0 ? '#10b981' : '#ef4444', // Green for start, Red for end
+                        fillColor: '#ffffff',
+                        fillOpacity: 1,
+                        weight: 2
+                    })
+                    .bindTooltip(idx === 0 ? 'Trail Start' : 'Last Location', { direction: 'top' })
+                    .addTo(polylineLayerGroup);
+                }
+            });
+        }
+    }
 }
 
 // Watch locations or guard pings updates
-watch(() => [props.locations, props.guardLocations], () => {
+watch(() => [props.locations, props.guardLocations, props.guardPings24h], () => {
     renderLayers();
 }, { deep: true });
 
@@ -282,6 +353,14 @@ onUnmounted(() => {
                 <span>Live Operations Map</span>
             </h3>
             <span class="text-[9px] text-slate-400 font-mono uppercase tracking-widest">Real-time Location Tracking</span>
+        </div>
+
+        <!-- Guard Selection Alert -->
+        <div v-if="selectedGuardId" class="bg-indigo-50 border border-indigo-100/80 p-3 rounded-2xl flex items-center justify-between text-[11px] text-indigo-900 font-bold font-mono">
+            <span>Showing 24h movement trail for selected guard</span>
+            <button @click="clearGuardSelection" class="text-[10px] text-rose-600 hover:text-rose-500 uppercase tracking-widest font-black">
+                Clear Trail
+            </button>
         </div>
 
         <div v-if="loadError" class="text-center py-10 text-xs text-rose-500 bg-rose-50/50 rounded-2xl border border-rose-100/80 font-mono">

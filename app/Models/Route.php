@@ -38,12 +38,13 @@ class Route extends Model
 
     public function routeCheckpoints(): HasMany
     {
-        return $this->hasMany(RouteCheckpoint::class)->orderBy('position');
+        return $this->hasMany(RouteCheckpoint::class)->where('position', '>', 0)->orderBy('position');
     }
 
     public function checkpoints(): BelongsToMany
     {
         return $this->belongsToMany(Checkpoint::class, 'route_checkpoints')
+                    ->wherePivot('position', '>', 0)
                     ->withPivot('id', 'position', 'photo_requirement', 'note_requirement', 'voice_requirement', 'signature_required')
                     ->withTimestamps()
                     ->orderBy('pivot_position');

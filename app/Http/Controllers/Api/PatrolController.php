@@ -127,7 +127,7 @@ class PatrolController extends Controller
         if ($activePatrol) {
             return response()->json([
                 'message' => 'You already have an active patrol session.',
-                'patrol' => $activePatrol,
+                'patrol' => $activePatrol->load(['checkpointLogs.checkpoint', 'route']),
             ], 422);
         }
 
@@ -171,7 +171,7 @@ class PatrolController extends Controller
 
         return response()->json([
             'message' => 'Patrol session started successfully.',
-            'patrol' => $patrol->load(['checkpointLogs.checkpoint']),
+            'patrol' => $patrol->load(['checkpointLogs.checkpoint', 'route']),
         ]);
     }
 
@@ -186,6 +186,7 @@ class PatrolController extends Controller
             'longitude' => 'required|numeric|between:-180,180',
             'note' => 'nullable|string',
             'media_file' => 'nullable|file|max:10240', // 10MB limit
+            'signature_file' => 'nullable|file|max:5120', // 5MB limit
         ]);
 
         $guard = $request->user();
@@ -312,6 +313,28 @@ class PatrolController extends Controller
                 'file_key' => $path,
                 'file_size_bytes' => $file->getSize(),
                 'mime_type' => $file->getMimeType(),
+                'captured_at' => now(),
+                'capture_latitude' => $request->latitude,
+                'capture_longitude' => $request->longitude,
+                'recorded_offline' => false,
+            ]);
+        }
+
+        // 4.1 Handle signature file upload
+        if ($request->hasFile('signature_file')) {
+            $sigFile = $request->file('signature_file');
+            $sigPath = $sigFile->store("tenants/{$guard->tenant_id}/patrols/{$patrol->id}/signatures", 'public');
+
+            CheckpointMedia::create([
+                'tenant_id' => $guard->tenant_id,
+                'patrol_checkpoint_log_id' => $log->id,
+                'patrol_id' => $patrol->id,
+                'guard_id' => $guard->id,
+                'kind' => 'signature',
+                'file_url' => asset('storage/' . $sigPath),
+                'file_key' => $sigPath,
+                'file_size_bytes' => $sigFile->getSize(),
+                'mime_type' => $sigFile->getMimeType(),
                 'captured_at' => now(),
                 'capture_latitude' => $request->latitude,
                 'capture_longitude' => $request->longitude,

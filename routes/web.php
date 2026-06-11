@@ -38,6 +38,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/admin/history', function () {
         return Inertia::render('Admin/History');
     })->name('admin.history');
+
+    Route::get('/admin/subscription', function () {
+        return Inertia::render('Admin/Subscription');
+    })->name('admin.subscription');
+
+    Route::get('/admin/superadmin', function () {
+        return Inertia::render('Admin/SuperadminConsole');
+    })->name('admin.superadmin');
 });
 
 Route::middleware('auth')->group(function () {
@@ -83,6 +91,13 @@ Route::middleware('auth')->group(function () {
 
         // History
         Route::get('/history', [\App\Http\Controllers\Api\AdminDashboardController::class, 'historyData']);
+
+        // Subscription & Superadmin Management
+        Route::get('/subscription', [\App\Http\Controllers\Api\AdminDashboardController::class, 'subscriptionData']);
+        Route::get('/superadmin/tenants', [\App\Http\Controllers\Api\AdminDashboardController::class, 'listTenants']);
+        Route::put('/superadmin/tenants/{id}/plan', [\App\Http\Controllers\Api\AdminDashboardController::class, 'updateTenantPlan']);
+        Route::get('/superadmin/plans', [\App\Http\Controllers\Api\AdminDashboardController::class, 'listPlans']);
+        Route::put('/superadmin/plans/{id}', [\App\Http\Controllers\Api\AdminDashboardController::class, 'updatePlan']);
     });
 });
 

@@ -55,6 +55,10 @@ class AdminDashboardController extends Controller
             ->unique('guard_id')
             ->values();
 
+        $guardPings24h = \App\Models\GuardLocationPing::where('pinged_at', '>=', now()->subDay())
+            ->orderBy('pinged_at', 'asc')
+            ->get();
+
         $locations = Location::with('checkpoints')->get();
 
         return response()->json([
@@ -63,6 +67,7 @@ class AdminDashboardController extends Controller
             'recent_incidents' => $recentIncidents,
             'active_sos' => $activeSos,
             'guard_locations' => $guardLocations,
+            'guard_pings_24h' => $guardPings24h,
             'locations' => $locations,
         ]);
     }
@@ -95,7 +100,7 @@ class AdminDashboardController extends Controller
      */
     public function listGuards(): JsonResponse
     {
-        $guards = Guard::orderBy('id', 'desc')->get();
+        $guards = Guard::with('tenant')->orderBy('id', 'desc')->get();
         return response()->json(['guards' => $guards]);
     }
 
@@ -111,7 +116,16 @@ class AdminDashboardController extends Controller
             'pin' => 'required|string|min:4|max:6',
         ]);
 
-        $tenantId = Auth::user()->tenant_id;
+        $tenantId = session('override_tenant_id') ?: Auth::user()->tenant_id;
+        $tenant = $tenantId ? \App\Models\Tenant::find($tenantId) : null;
+        if ($tenant) {
+            $max = $tenant->plan_details['guards_limit'] ?? 99999;
+            if (Guard::where('tenant_id', $tenantId)->count() >= $max) {
+                return response()->json([
+                    'message' => "Limit reached: Your subscription plan ({$tenant->plan_details['name']}) allows a maximum of {$max} security guards."
+                ], 422);
+            }
+        }
 
         $guard = Guard::create([
             'tenant_id' => $tenantId,
@@ -133,9 +147,9 @@ class AdminDashboardController extends Controller
      */
     public function locationsData(): JsonResponse
     {
-        $locations = Location::with('checkpoints')->get();
-        $checkpoints = Checkpoint::with('location')->get();
-        $routes = Route::with(['routeCheckpoints.checkpoint'])->get();
+        $locations = Location::with(['checkpoints', 'tenant'])->get();
+        $checkpoints = Checkpoint::with(['location', 'tenant'])->get();
+        $routes = Route::with(['routeCheckpoints.checkpoint', 'tenant'])->get();
 
         return response()->json([
             'locations' => $locations,
@@ -159,7 +173,16 @@ class AdminDashboardController extends Controller
             'geofence_radius' => 'required|integer|min:10',
         ]);
 
-        $tenantId = Auth::user()->tenant_id;
+        $tenantId = session('override_tenant_id') ?: Auth::user()->tenant_id;
+        $tenant = $tenantId ? \App\Models\Tenant::find($tenantId) : null;
+        if ($tenant) {
+            $max = $tenant->plan_details['locations_limit'] ?? 99999;
+            if (Location::where('tenant_id', $tenantId)->count() >= $max) {
+                return response()->json([
+                    'message' => "Limit reached: Your subscription plan ({$tenant->plan_details['name']}) allows a maximum of {$max} locations."
+                ], 422);
+            }
+        }
 
         $location = Location::create(array_merge($request->all(), [
             'tenant_id' => $tenantId,
@@ -194,7 +217,16 @@ class AdminDashboardController extends Controller
             'signature_required' => 'required|boolean',
         ]);
 
-        $tenantId = Auth::user()->tenant_id;
+        $tenantId = session('override_tenant_id') ?: Auth::user()->tenant_id;
+        $tenant = $tenantId ? \App\Models\Tenant::find($tenantId) : null;
+        if ($tenant) {
+            $max = $tenant->plan_details['checkpoints_limit'] ?? 99999;
+            if (Checkpoint::where('tenant_id', $tenantId)->count() >= $max) {
+                return response()->json([
+                    'message' => "Limit reached: Your subscription plan ({$tenant->plan_details['name']}) allows a maximum of {$max} checkpoints."
+                ], 422);
+            }
+        }
 
         $checkpoint = Checkpoint::create(array_merge($request->all(), [
             'tenant_id' => $tenantId,
@@ -300,7 +332,7 @@ class AdminDashboardController extends Controller
      */
     public function listContacts(): JsonResponse
     {
-        $contacts = PatrolContact::orderBy('id', 'desc')->get();
+        $contacts = PatrolContact::with('tenant')->orderBy('id', 'desc')->get();
         return response()->json(['contacts' => $contacts]);
     }
 
@@ -500,15 +532,50 @@ class AdminDashboardController extends Controller
             'expected_duration_mins' => $request->expected_duration_mins,
         ]);
 
-        // Delete existing checkpoints sequence and re-create
-        RouteCheckpoint::where('route_id', $route->id)->delete();
+        $newCheckpointIds = $request->checkpoints;
+        $existingRouteCheckpoints = RouteCheckpoint::where('route_id', $route->id)->get();
 
-        foreach ($request->checkpoints as $index => $checkpointId) {
-            RouteCheckpoint::create([
-                'route_id' => $route->id,
-                'checkpoint_id' => $checkpointId,
-                'position' => $index + 1,
-            ]);
+        // 1. Shift positions to temporary offset to clear any unique sequence constraints during the update
+        foreach ($existingRouteCheckpoints as $rc) {
+            $rc->update(['position' => $rc->position + 10000]);
+        }
+
+        $processedRouteCheckpointIds = [];
+
+        // 2. Map new positions for the active checkpoints
+        foreach ($newCheckpointIds as $index => $checkpointId) {
+            $position = $index + 1;
+            $rc = $existingRouteCheckpoints->firstWhere('checkpoint_id', $checkpointId);
+
+            if ($rc) {
+                $rc->update(['position' => $position]);
+                $processedRouteCheckpointIds[] = $rc->id;
+            } else {
+                $newRc = RouteCheckpoint::create([
+                    'route_id' => $route->id,
+                    'checkpoint_id' => $checkpointId,
+                    'position' => $position,
+                ]);
+                $processedRouteCheckpointIds[] = $newRc->id;
+            }
+        }
+
+        // 3. Remove or archive the checkpoints that are no longer assigned
+        foreach ($existingRouteCheckpoints as $rc) {
+            if (in_array($rc->id, $processedRouteCheckpointIds)) {
+                continue;
+            }
+
+            // Check if this route checkpoint is already referenced in patrol logs
+            $isReferenced = \App\Models\PatrolCheckpointLog::where('route_checkpoint_id', $rc->id)->exists();
+
+            if ($isReferenced) {
+                // Keep it in DB but flag/archive it with negative position so it's ignored on active patrols
+                $rc->update(['position' => -($rc->id)]);
+            } else {
+                // Safely delete it
+                $rc->delete();
+            }
         }
 
         return response()->json([
@@ -609,7 +676,8 @@ class AdminDashboardController extends Controller
             'incidents.location',
             'incidents.media',
             'checkpointLogs.checkpoint',
-            'checkpointLogs.media'
+            'checkpointLogs.media',
+            'locationPings'
         ])->orderBy('started_at', 'desc');
 
         if ($guardId) {
@@ -639,6 +707,152 @@ class AdminDashboardController extends Controller
             'patrols' => $patrols,
             'incidents' => $incidents,
             'guards' => $guards
+        ]);
+    }
+
+    /**
+     * List all tenants with plan details and current usage.
+     */
+    public function listTenants(): JsonResponse
+    {
+        if (Auth::user()->role !== 'superadmin') {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $tenants = \App\Models\Tenant::with(['subscriptionLogs.operator'])
+            ->orderBy('name')
+            ->get()
+            ->map(function ($tenant) {
+                $guardsCount = \App\Models\Guard::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count();
+                $locationsCount = \App\Models\Location::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count();
+                $checkpointsCount = \App\Models\Checkpoint::withoutGlobalScopes()->where('tenant_id', $tenant->id)->count();
+
+                $tenant->guards_count = $guardsCount;
+                $tenant->locations_count = $locationsCount;
+                $tenant->checkpoints_count = $checkpointsCount;
+
+                return $tenant;
+            });
+
+        return response()->json([
+            'tenants' => $tenants,
+            'available_plans' => \App\Models\SubscriptionPlan::all()->keyBy('plan_key'),
+        ]);
+    }
+
+    /**
+     * Get active tenant subscription data and usage statistics.
+     */
+    public function subscriptionData(): JsonResponse
+    {
+        $tenantId = session('override_tenant_id') ?: Auth::user()->tenant_id;
+        if (!$tenantId) {
+            return response()->json([
+                'tenant' => null,
+                'plan_details' => null,
+                'usage' => null,
+                'message' => 'No active company context.'
+            ]);
+        }
+
+        $tenant = \App\Models\Tenant::with(['subscriptionLogs.operator'])->findOrFail($tenantId);
+
+        $guardsCount = \App\Models\Guard::where('tenant_id', $tenantId)->count();
+        $locationsCount = \App\Models\Location::where('tenant_id', $tenantId)->count();
+        $checkpointsCount = \App\Models\Checkpoint::where('tenant_id', $tenantId)->count();
+
+        return response()->json([
+            'tenant' => $tenant,
+            'plan_details' => $tenant->plan_details,
+            'usage' => [
+                'guards_count' => $guardsCount,
+                'locations_count' => $locationsCount,
+                'checkpoints_count' => $checkpointsCount,
+            ]
+        ]);
+    }
+
+    /**
+     * Update a tenant's subscription plan.
+     */
+    public function updateTenantPlan(Request $request, $id): JsonResponse
+    {
+        if (Auth::user()->role !== 'superadmin') {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $request->validate([
+            'subscription_plan' => 'required|in:basic,professional,enterprise',
+            'subscription_until' => 'nullable|date',
+        ]);
+
+        $tenant = \App\Models\Tenant::findOrFail($id);
+
+        $prevPlan = $tenant->subscription_plan;
+        $prevUntil = $tenant->subscription_until;
+
+        $tenant->update([
+            'subscription_plan' => $request->subscription_plan,
+            'subscription_until' => $request->subscription_until,
+        ]);
+
+        \App\Models\TenantSubscriptionLog::create([
+            'tenant_id' => $tenant->id,
+            'changed_by' => Auth::id(),
+            'previous_plan' => $prevPlan ?: 'basic',
+            'new_plan' => $request->subscription_plan,
+            'previous_until' => $prevUntil,
+            'new_until' => $request->subscription_until,
+        ]);
+
+        return response()->json([
+            'message' => 'Subscription plan updated successfully.',
+            'tenant' => $tenant,
+        ]);
+    }
+
+    /**
+     * List all subscription plans.
+     */
+    public function listPlans(): JsonResponse
+    {
+        if (Auth::user()->role !== 'superadmin') {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $plans = \App\Models\SubscriptionPlan::orderBy('id')->get();
+        return response()->json(['plans' => $plans]);
+    }
+
+    /**
+     * Update a subscription plan's limits/price.
+     */
+    public function updatePlan(Request $request, $id): JsonResponse
+    {
+        if (Auth::user()->role !== 'superadmin') {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'guards_limit' => 'required|integer|min:1',
+            'locations_limit' => 'required|integer|min:1',
+            'checkpoints_limit' => 'required|integer|min:1',
+            'price_monthly' => 'required|numeric|min:0',
+        ]);
+
+        $plan = \App\Models\SubscriptionPlan::findOrFail($id);
+        $plan->update([
+            'name' => $request->name,
+            'guards_limit' => $request->guards_limit,
+            'locations_limit' => $request->locations_limit,
+            'checkpoints_limit' => $request->checkpoints_limit,
+            'price_monthly' => $request->price_monthly,
+        ]);
+
+        return response()->json([
+            'message' => 'Subscription plan package updated successfully.',
+            'plan' => $plan,
         ]);
     }
 }

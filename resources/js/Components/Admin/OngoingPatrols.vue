@@ -153,10 +153,18 @@ function formatTime(timeStr: string) {
                                 </span>
                             </div>
 
+                            <!-- Geofence Breach Warning Badge -->
+                            <div v-if="log.status === 'scanned' && log.gps_within_fence === false" class="bg-red-50 border border-red-200 text-red-650 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-[9px] font-bold">
+                                <span>⚠️ Geofence Breach: Scanned outside boundary</span>
+                                <span v-if="log.gps_distance_metres !== null && log.gps_distance_metres !== undefined" class="font-mono">
+                                    ({{ Math.round(log.gps_distance_metres) }}m away)
+                                </span>
+                            </div>
+
                             <!-- Scanned / Skipped Details -->
                             <div v-if="log.status === 'scanned' || log.status === 'skipped'" class="space-y-2 border-t border-slate-100 pt-2 text-[10px] text-slate-600">
                                 <div class="flex justify-between font-mono text-[9px] text-slate-400">
-                                    <span>Time: {{ formatTime(log.scanned_at || log.skipped_at) }}</span>
+                                    <span>Time: {{ formatTime(log.scanned_at || log.skipped_at || log.updated_at || log.created_at) }}</span>
                                     <span v-if="log.recorded_offline" class="text-amber-600">Recorded Offline</span>
                                 </div>
                                 
@@ -168,17 +176,34 @@ function formatTime(timeStr: string) {
                                 </p>
 
                                 <!-- Attached photos -->
-                                <div v-if="log.media && log.media.length > 0" class="space-y-1.5">
+                                <div v-if="log.media && log.media.filter((m: any) => m.kind !== 'signature').length > 0" class="space-y-1.5">
                                     <span class="font-black font-mono text-[8px] uppercase text-slate-400 block">Attached Evidence</span>
                                     <div class="flex flex-wrap gap-2">
                                         <a 
-                                            v-for="m in log.media" 
+                                            v-for="m in log.media.filter((m: any) => m.kind !== 'signature')" 
                                             :key="m.id"
                                             :href="m.file_url" 
                                             target="_blank"
                                             class="relative block w-14 h-14 rounded-lg overflow-hidden border border-slate-200 hover:border-indigo-500 transition-colors shadow-xs"
                                         >
                                             <img :src="m.file_url" class="w-full h-full object-cover" />
+                                        </a>
+                                    </div>
+                                </div>
+
+                                <!-- Checkpoint Signature -->
+                                <div v-if="log.media && log.media.find((m: any) => m.kind === 'signature')" class="space-y-1.5">
+                                    <span class="font-black font-mono text-[8px] uppercase text-slate-400 block">Checkpoint Signature</span>
+                                    <div class="flex">
+                                        <a 
+                                            :href="log.media.find((m: any) => m.kind === 'signature')?.file_url" 
+                                            target="_blank"
+                                            class="inline-block border border-slate-150 rounded-lg overflow-hidden bg-white p-1 hover:border-indigo-500 transition-colors shadow-xs"
+                                        >
+                                            <img 
+                                                :src="log.media.find((m: any) => m.kind === 'signature')?.file_url" 
+                                                class="max-h-[36px] max-w-[120px] object-contain"
+                                            />
                                         </a>
                                     </div>
                                 </div>

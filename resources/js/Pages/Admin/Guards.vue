@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 
@@ -15,11 +15,21 @@ interface Guard {
     is_active: boolean;
     last_login_at: string | null;
     last_seen_at: string | null;
+    tenant?: {
+        id: number;
+        name: string;
+    };
 }
 
 const guards = ref<Guard[]>([]);
 const showAddGuardModal = ref(false);
 const editingGuard = ref<Guard | null>(null);
+
+const page = usePage();
+const isAllCompaniesMode = computed(() => {
+    const user = page.props.auth.user as any;
+    return user.role === 'superadmin' && !(page.props.auth as any).override_tenant_id;
+});
 
 const searchQuery = ref('');
 const statusFilter = ref('all');
@@ -36,6 +46,7 @@ async function fetchGuards() {
 }
 
 function openAddGuard() {
+    if (isAllCompaniesMode.value) return;
     editingGuard.value = null;
     showAddGuardModal.value = true;
 }
@@ -143,13 +154,22 @@ onMounted(() => {
                 <span class="text-xs text-slate-500 font-black uppercase tracking-widest font-mono">Guards Directory ({{ filteredAndSortedGuards.length }})</span>
                 <button 
                     @click="openAddGuard"
-                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center space-x-2 min-h-[48px]"
+                    :disabled="isAllCompaniesMode"
+                    class="text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md flex items-center space-x-2 min-h-[48px]"
+                    :class="isAllCompaniesMode ? 'bg-slate-350 cursor-not-allowed opacity-60' : 'bg-indigo-600 hover:bg-indigo-500 active:scale-95'"
+                    :title="isAllCompaniesMode ? 'Select a company from the top context selector to register guards' : ''"
                 >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                     </svg>
                     <span>Register Guard</span>
                 </button>
+            </div>
+
+            <!-- Context warning banner -->
+            <div v-if="isAllCompaniesMode" class="bg-indigo-50 border border-indigo-150 p-4 rounded-2xl flex items-center gap-3 text-xs text-indigo-750 font-medium">
+                <span class="text-base">ℹ️</span>
+                <span>You are viewing guards across <strong>all companies</strong>. To register new security guards or edit their security PIN configurations, please select a specific company context from the dropdown at the top.</span>
             </div>
 
             <!-- Filters Bar -->
@@ -181,6 +201,9 @@ onMounted(() => {
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="border-b border-slate-150 bg-slate-50/50 text-[9px] font-black text-slate-450 uppercase tracking-widest font-mono">
+                                <th v-if="isAllCompaniesMode" class="p-5">
+                                    Company
+                                </th>
                                 <th class="p-5 cursor-pointer select-none hover:bg-slate-100" @click="toggleSort('full_name')">
                                     Guard Details
                                     <span v-if="sortKey === 'full_name'">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
@@ -206,6 +229,9 @@ onMounted(() => {
                         </thead>
                         <tbody class="divide-y divide-slate-150 text-xs text-slate-600">
                             <tr v-for="g in filteredAndSortedGuards" :key="g.id" class="hover:bg-slate-50/50 group">
+                                <td v-if="isAllCompaniesMode" class="p-5 font-bold text-slate-700">
+                                    {{ g.tenant?.name || 'System' }}
+                                </td>
                                 <td class="p-5 font-black text-slate-800 font-mono group-hover:text-indigo-600 transition-colors">
                                     {{ g.full_name }}
                                 </td>
@@ -244,7 +270,7 @@ onMounted(() => {
                                 </td>
                             </tr>
                             <tr v-if="filteredAndSortedGuards.length === 0">
-                                <td colspan="6" class="p-16 text-center text-slate-400 font-medium">No security guards match the filter criteria.</td>
+                                <td :colspan="isAllCompaniesMode ? 7 : 6" class="p-16 text-center text-slate-400 font-medium">No security guards match the filter criteria.</td>
                             </tr>
                         </tbody>
                     </table>

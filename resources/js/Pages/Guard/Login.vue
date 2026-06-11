@@ -6,7 +6,7 @@ const emit = defineEmits<{
     (e: 'login-success', data: { token: string; guard: any }): void;
 }>();
 
-const phone = ref('+35799123456');
+const phone = ref('');
 const otpCode = ref('');
 const step = ref<'phone' | 'otp'>('phone');
 const isLoading = ref(false);
@@ -105,6 +105,14 @@ function handleClear() {
         otpCode.value = '';
     }
 }
+
+function handleOtpInputChange() {
+    otpCode.value = otpCode.value.replace(/[^0-9]/g, '').slice(0, 6);
+    errorMsg.value = null;
+    if (otpCode.value.length === 6) {
+        handleVerifyOtp();
+    }
+}
 </script>
 
 <template>
@@ -158,6 +166,20 @@ function handleClear() {
 
                 <!-- STEP 1: Phone Number Mode -->
                 <div v-if="step === 'phone'">
+                    <!-- Demo Phone Autofill Helper -->
+                    <div class="mb-5 bg-slate-850/60 border border-slate-800/80 rounded-xl p-3 text-[11px] text-slate-300 flex items-center justify-between">
+                        <div>
+                            <span class="font-bold text-[9px] uppercase tracking-widest block text-indigo-400 mb-0.5 font-mono">Quick Testing Autofill</span>
+                            <span>Phone: <strong class="text-white font-mono ml-0.5">+35799123456</strong></span>
+                        </div>
+                        <button 
+                            @click="phone = '+35799123456'" 
+                            class="bg-indigo-600 hover:bg-indigo-500 text-white font-black px-3 py-1.5 rounded-lg text-[9px] uppercase tracking-wider transition-all shadow-md active:scale-95"
+                        >
+                            Fill
+                        </button>
+                    </div>
+
                     <label class="block text-[10px] font-bold tracking-widest text-slate-400 uppercase mb-2">Phone Number</label>
                     <div class="relative mb-6">
                         <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
@@ -168,7 +190,6 @@ function handleClear() {
                         <input 
                             v-model="phone" 
                             type="tel" 
-                            readonly
                             class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-100 pl-10 pr-4 py-3.5 rounded-2xl text-lg font-bold font-mono tracking-wide focus:outline-none"
                             placeholder="+35799123456"
                         />
@@ -192,15 +213,25 @@ function handleClear() {
                     </div>
                     <p class="text-xs text-slate-400 mb-4">Code sent to <span class="font-mono text-slate-300 font-semibold">{{ phone }}</span></p>
 
-                    <!-- Custom 6 Box OTP Indicator -->
-                    <div class="flex justify-between gap-2 mb-6">
-                        <div 
-                            v-for="i in 6" 
-                            :key="i"
-                            class="w-12 h-14 bg-slate-950 border rounded-2xl flex items-center justify-center text-xl font-bold font-mono text-indigo-400"
-                            :class="otpCode.length >= i ? 'border-indigo-500 shadow-lg shadow-indigo-500/10' : 'border-slate-800'"
-                        >
-                            {{ otpCode[i - 1] || '' }}
+                    <!-- Custom 6 Box OTP Indicator with native hidden input for copy-paste/SMS autofill -->
+                    <div class="relative mb-6">
+                        <input 
+                            v-model="otpCode"
+                            type="tel"
+                            maxlength="6"
+                            autocomplete="one-time-code"
+                            class="absolute inset-0 w-full h-full opacity-0 cursor-text text-transparent bg-transparent border-none focus:ring-0 focus:outline-none"
+                            @input="handleOtpInputChange"
+                        />
+                        <div class="flex justify-between gap-2 pointer-events-none">
+                            <div 
+                                v-for="i in 6" 
+                                :key="i"
+                                class="w-12 h-14 bg-slate-950 border rounded-2xl flex items-center justify-center text-xl font-bold font-mono text-indigo-400"
+                                :class="otpCode.length >= i ? 'border-indigo-500 shadow-lg shadow-indigo-500/10' : 'border-slate-800'"
+                            >
+                                {{ otpCode[i - 1] || '' }}
+                            </div>
                         </div>
                     </div>
 

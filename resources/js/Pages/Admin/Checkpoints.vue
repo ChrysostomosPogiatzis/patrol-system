@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 
@@ -17,6 +17,10 @@ interface Location {
     latitude: number;
     longitude: number;
     geofence_radius: number;
+    tenant?: {
+        id: number;
+        name: string;
+    };
 }
 
 interface Checkpoint {
@@ -37,6 +41,10 @@ interface Checkpoint {
     signature_required: boolean;
     incident_enabled: boolean;
     location?: Location;
+    tenant?: {
+        id: number;
+        name: string;
+    };
 }
 
 const locations = ref<Location[]>([]);
@@ -47,6 +55,12 @@ const showAddCheckpointModal = ref(false);
 
 const editingLocation = ref<Location | null>(null);
 const editingCheckpoint = ref<Checkpoint | null>(null);
+
+const page = usePage();
+const isAllCompaniesMode = computed(() => {
+    const user = page.props.auth.user as any;
+    return user.role === 'superadmin' && !(page.props.auth as any).override_tenant_id;
+});
 
 const searchQuery = ref('');
 const siteFilter = ref('');
@@ -217,11 +231,20 @@ onMounted(() => {
 
     <AdminLayout title="Sites & Checkpoints Configuration">
         <div class="space-y-6">
+            <!-- Context warning banner -->
+            <div v-if="isAllCompaniesMode" class="bg-indigo-50 border border-indigo-150 p-4 rounded-2xl flex items-center gap-3 text-xs text-indigo-750 font-medium">
+                <span class="text-base">ℹ️</span>
+                <span>You are viewing sites and checkpoints across <strong>all companies</strong>. To register new sites, configure checkpoints, or edit geographic fences, please select a specific company context from the dropdown at the top.</span>
+            </div>
+
             <!-- Action bar -->
             <div class="flex gap-3">
                 <button 
                     @click="openAddLocation" 
-                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center space-x-2 min-h-[48px]"
+                    :disabled="isAllCompaniesMode"
+                    class="text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md flex items-center space-x-2 min-h-[48px]"
+                    :class="isAllCompaniesMode ? 'bg-slate-350 cursor-not-allowed opacity-60' : 'bg-indigo-600 hover:bg-indigo-500 active:scale-95'"
+                    :title="isAllCompaniesMode ? 'Select a company context to add locations' : ''"
                 >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -232,9 +255,12 @@ onMounted(() => {
                 
                 <button 
                     @click="openAddCheckpoint" 
-                    class="bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 border border-slate-200 font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-sm active:scale-95 flex items-center space-x-2 min-h-[48px]"
+                    :disabled="isAllCompaniesMode"
+                    class="border border-slate-200 font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-sm flex items-center space-x-2 min-h-[48px]"
+                    :class="isAllCompaniesMode ? 'bg-slate-50 text-slate-400 cursor-not-allowed opacity-60' : 'bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 active:scale-95'"
+                    :title="isAllCompaniesMode ? 'Select a company context to add checkpoints' : ''"
                 >
-                    <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg class="w-4 h-4" :class="isAllCompaniesMode ? 'text-slate-300' : 'text-indigo-600'" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
                     <span>Add Checkpoint</span>
@@ -251,7 +277,10 @@ onMounted(() => {
                     <div class="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                         <div v-for="l in locations" :key="l.id" class="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-3 hover:border-slate-250 transition-colors">
                             <div class="flex justify-between items-start">
-                                <h4 class="text-xs font-black text-slate-800 font-mono leading-tight">{{ l.name }}</h4>
+                                <div>
+                                    <h4 class="text-xs font-black text-slate-800 font-mono leading-tight">{{ l.name }}</h4>
+                                    <div v-if="isAllCompaniesMode" class="text-[9px] font-bold text-slate-450 uppercase mt-0.5">{{ l.tenant?.name || 'System' }}</div>
+                                </div>
                                 <span class="text-[8px] font-mono font-bold bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded border border-indigo-150">
                                     ID: {{ l.id }}
                                 </span>
@@ -344,8 +373,9 @@ onMounted(() => {
                             class="bg-slate-50 border border-slate-150 rounded-xl p-4 flex flex-col md:flex-row md:items-start justify-between gap-4 group hover:border-slate-300 transition-colors"
                         >
                             <div class="space-y-1.5 flex-1">
-                                <div class="flex items-center space-x-2">
+                                <div class="flex items-center space-x-2 flex-wrap gap-y-1">
                                     <h4 class="text-xs font-black text-slate-800 font-mono group-hover:text-indigo-600 transition-colors">{{ cp.name }}</h4>
+                                    <span v-if="isAllCompaniesMode" class="text-[9px] font-bold text-slate-450 uppercase font-mono bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded">{{ cp.tenant?.name || 'System' }}</span>
                                     <span class="inline-block text-[8px] font-mono bg-indigo-50 border border-indigo-150 text-indigo-600 px-2 py-0.5 rounded-full font-bold uppercase">
                                         {{ cp.scan_method }}
                                     </span>

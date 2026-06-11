@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
 
@@ -32,12 +32,22 @@ interface Route {
     allow_skip: boolean;
     expected_duration_mins?: number;
     route_checkpoints?: RouteCheckpoint[];
+    tenant?: {
+        id: number;
+        name: string;
+    };
 }
 
 const routes = ref<Route[]>([]);
 const checkpoints = ref<Checkpoint[]>([]);
 const showAddRouteModal = ref(false);
 const editingRoute = ref<Route | null>(null);
+
+const page = usePage();
+const isAllCompaniesMode = computed(() => {
+    const user = page.props.auth.user as any;
+    return user.role === 'superadmin' && !(page.props.auth as any).override_tenant_id;
+});
 
 const searchQuery = ref('');
 const sortBy = ref('name'); // name, duration
@@ -143,12 +153,21 @@ onMounted(() => {
 
     <AdminLayout title="Patrol Routes Sequence">
         <div class="space-y-4">
+            <!-- Context warning banner -->
+            <div v-if="isAllCompaniesMode" class="bg-indigo-50 border border-indigo-150 p-4 rounded-2xl flex items-center gap-3 text-xs text-indigo-750 font-medium">
+                <span class="text-base">ℹ️</span>
+                <span>You are viewing routes across <strong>all companies</strong>. To create new patrol routes or customize sequential checkpoints validation, please select a specific company context from the dropdown at the top.</span>
+            </div>
+
             <!-- Action bar -->
             <div class="flex justify-between items-center">
                 <span class="text-xs text-slate-500 font-black uppercase tracking-widest font-mono">Routing Configurations ({{ filteredAndSortedRoutes.length }})</span>
                 <button 
                     @click="openAddRoute"
-                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md active:scale-95 flex items-center space-x-2 min-h-[48px]"
+                    :disabled="isAllCompaniesMode"
+                    class="text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md flex items-center space-x-2 min-h-[48px]"
+                    :class="isAllCompaniesMode ? 'bg-slate-350 cursor-not-allowed opacity-60' : 'bg-indigo-600 hover:bg-indigo-500 active:scale-95'"
+                    :title="isAllCompaniesMode ? 'Select a company context to create routes' : ''"
                 >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
@@ -196,8 +215,11 @@ onMounted(() => {
                 >
                     <div class="flex justify-between items-start">
                         <div>
-                            <h4 class="text-sm font-black text-slate-800 font-mono group-hover:text-indigo-600 transition-colors">{{ route.name }}</h4>
-                            <p class="text-[11px] text-slate-500 mt-1.5 leading-relaxed">{{ route.description || 'No description provided' }}</p>
+                            <h4 class="text-sm font-black text-slate-800 font-mono group-hover:text-indigo-600 transition-colors flex items-center gap-2 flex-wrap">
+                                <span>{{ route.name }}</span>
+                                <span v-if="isAllCompaniesMode" class="text-[9px] font-bold text-slate-450 uppercase bg-slate-105 border border-slate-200 px-1.5 py-0.5 rounded font-sans normal-case">{{ route.tenant?.name || 'System' }}</span>
+                            </h4>
+                            <p class="text-[11px] text-slate-505 mt-1.5 leading-relaxed">{{ route.description || 'No description provided' }}</p>
                         </div>
                         <div class="text-right text-[9px] font-mono space-y-1.5 min-w-[90px]">
                             <span class="block bg-slate-50 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-150 font-bold uppercase">

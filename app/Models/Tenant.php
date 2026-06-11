@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\SubscriptionPlan;
 
 class Tenant extends Model
 {
@@ -30,6 +31,34 @@ class Tenant extends Model
         'settings' => 'array',
     ];
 
+    protected $appends = [
+        'plan_details',
+    ];
+
+    public function getPlanDetailsAttribute(): array
+    {
+        $planKey = $this->subscription_plan ?: 'basic';
+        $plan = SubscriptionPlan::where('plan_key', $planKey)->first();
+        if ($plan) {
+            return [
+                'name' => $plan->name,
+                'guards_limit' => $plan->guards_limit,
+                'locations_limit' => $plan->locations_limit,
+                'checkpoints_limit' => $plan->checkpoints_limit,
+                'price_monthly' => (float) $plan->price_monthly,
+            ];
+        }
+
+        // Fallback
+        return [
+            'name' => 'Basic Plan',
+            'guards_limit' => 2,
+            'locations_limit' => 2,
+            'checkpoints_limit' => 5,
+            'price_monthly' => 29.00,
+        ];
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
@@ -48,5 +77,10 @@ class Tenant extends Model
     public function guards(): HasMany
     {
         return $this->hasMany(Guard::class);
+    }
+
+    public function subscriptionLogs(): HasMany
+    {
+        return $this->hasMany(TenantSubscriptionLog::class)->orderBy('id', 'desc');
     }
 }

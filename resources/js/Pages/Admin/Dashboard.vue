@@ -61,6 +61,7 @@ const activePatrols = ref<Patrol[]>([]);
 const recentIncidents = ref<Incident[]>([]);
 const activeSos = ref<SosAlert[]>([]);
 const guardLocations = ref<any[]>([]);
+const guardPings24h = ref<any[]>([]);
 const locations = ref<any[]>([]);
 
 const showResolveModal = ref<'incident' | 'sos' | null>(null);
@@ -76,6 +77,7 @@ async function fetchOverview() {
         recentIncidents.value = response.data.recent_incidents;
         activeSos.value = response.data.active_sos;
         guardLocations.value = response.data.guard_locations || [];
+        guardPings24h.value = response.data.guard_pings_24h || [];
         locations.value = response.data.locations || [];
     } catch (e) {
         console.error('Failed to load overview data:', e);
@@ -181,7 +183,7 @@ onUnmounted(() => {
 
         <!-- LIVE MAP CONTAINER -->
         <div class="mb-6">
-            <LiveMap :locations="locations" :guard-locations="guardLocations" />
+            <LiveMap :locations="locations" :guard-locations="guardLocations" :guard-pings-24h="guardPings24h" />
         </div>
 
         <!-- LAYOUT GRID -->

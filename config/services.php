@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'routee' => [
+        'app_id' => env('ROUTEE_APP_ID'),
+        'app_secret' => env('ROUTEE_APP_SECRET'),
+        'from' => env('ROUTEE_SMS_FROM', 'Patrol Manager'),
+    ],
+
 ];
