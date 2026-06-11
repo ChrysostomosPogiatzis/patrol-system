@@ -188,6 +188,25 @@ function toggleSort(key: string) {
     }
 }
 
+const activeQrCode = ref<string | null>(null);
+const activeQrName = ref<string | null>(null);
+
+function showQrModal(code: string, name: string) {
+    activeQrCode.value = code;
+    activeQrName.value = name;
+}
+
+function closeQrModal() {
+    activeQrCode.value = null;
+    activeQrName.value = null;
+}
+
+function downloadQrCode() {
+    if (!activeQrCode.value) return;
+    const url = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(activeQrCode.value)}`;
+    window.open(url, '_blank');
+}
+
 onMounted(() => {
     fetchData();
 });
@@ -265,7 +284,7 @@ onMounted(() => {
                 <!-- Checkpoints list panel -->
                 <div class="lg:col-span-2 bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm">
                     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-2 border-b border-slate-150">
-                        <h3 class="text-xs font-black tracking-widest text-slate-450 uppercase font-mono">
+                        <h3 class="text-xs font-black tracking-widest text-slate-455 uppercase font-mono">
                             Checkpoints ({{ filteredAndSortedCheckpoints.length }})
                         </h3>
                         <!-- Sort buttons -->
@@ -376,15 +395,22 @@ onMounted(() => {
 
                             <!-- Diagnostic codes -->
                             <div class="text-left md:text-right space-y-1.5 font-mono text-[9px] md:border-l md:border-slate-150 md:pl-4 min-w-[150px]">
-                                <div v-if="cp.qr_code" class="text-slate-600">
-                                    <span class="text-slate-450 uppercase font-black block text-[8px]">QR Target Code</span>
-                                    <span class="bg-white px-1.5 py-0.5 rounded border border-slate-200 inline-block mt-0.5 font-bold text-slate-700">{{ cp.qr_code }}</span>
+                                <div v-if="cp.qr_code" class="text-slate-600 cursor-pointer" @click="showQrModal(cp.qr_code, cp.name)">
+                                    <span class="text-slate-455 uppercase font-black block text-[8px] flex items-center md:justify-end gap-1 hover:text-indigo-600 transition-colors">
+                                        <span>QR Target Code</span>
+                                        <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                        </svg>
+                                    </span>
+                                    <span class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded inline-block mt-0.5 font-bold transition-all shadow-xs">
+                                        {{ cp.qr_code }}
+                                    </span>
                                 </div>
                                 <div v-if="cp.nfc_tag_id" class="text-slate-600">
-                                    <span class="text-slate-450 uppercase font-black block text-[8px]">NFC Tag ID</span>
+                                    <span class="text-slate-455 uppercase font-black block text-[8px]">NFC Tag ID</span>
                                     <span class="bg-white px-1.5 py-0.5 rounded border border-slate-200 inline-block mt-0.5 font-bold text-slate-700">{{ cp.nfc_tag_id }}</span>
                                 </div>
-                                <div class="text-slate-450">
+                                <div class="text-slate-455">
                                     <span class="text-slate-500 font-bold block text-[8px] uppercase">Coordinates</span>
                                     {{ formatCoord(cp.latitude, 5) }}, {{ formatCoord(cp.longitude, 5) }}
                                 </div>
@@ -399,5 +425,50 @@ onMounted(() => {
         <!-- FORM MODALS -->
         <LocationModal :show="showAddLocationModal" :location="editingLocation" @close="showAddLocationModal = false" @submit="submitAddLocation" />
         <CheckpointModal :show="showAddCheckpointModal" :locations="locations" :checkpoint="editingCheckpoint" @close="showAddCheckpointModal = false" @submit="submitAddCheckpoint" />
+        
+        <!-- QR CODE PREVIEW MODAL -->
+        <div v-if="activeQrCode" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md transition-all duration-300">
+            <div class="bg-white border border-slate-200/80 rounded-3xl p-6 max-w-sm w-full shadow-2xl relative space-y-4">
+                <button @click="closeQrModal" class="absolute top-4 right-4 text-slate-455 hover:text-slate-700 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+                
+                <div class="text-center space-y-1">
+                    <h3 class="text-xs font-black tracking-widest text-slate-400 uppercase font-mono">Checkpoint QR Code</h3>
+                    <h4 class="text-sm font-bold text-slate-800">{{ activeQrName }}</h4>
+                </div>
+
+                <div class="flex flex-col items-center justify-center bg-slate-50 border border-slate-100 rounded-2xl p-6">
+                    <img 
+                        :src="`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(activeQrCode)}`" 
+                        class="w-48 h-48 bg-white p-2 rounded-lg shadow-xs border border-slate-200" 
+                        alt="QR Code"
+                    />
+                    <span class="mt-4 font-mono font-bold text-indigo-700 text-xs bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
+                        {{ activeQrCode }}
+                    </span>
+                </div>
+
+                <div class="flex gap-2">
+                    <button 
+                        @click="downloadQrCode"
+                        class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-black uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-98 flex items-center justify-center gap-1.5"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                        <span>Open & Save QR</span>
+                    </button>
+                    <button 
+                        @click="closeQrModal" 
+                        class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all active:scale-98"
+                    >
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
     </AdminLayout>
 </template>
