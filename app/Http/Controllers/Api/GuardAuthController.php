@@ -49,15 +49,15 @@ class GuardAuthController extends Controller
         $cleanPhone = preg_replace('/[^0-9]/', '', $request->phone);
         $rateLimitKey = 'otp-request:' . $cleanPhone;
 
-        if (RateLimiter::tooManyAttempts($rateLimitKey, 2)) {
+        if (RateLimiter::tooManyAttempts($rateLimitKey, 3)) {
             $seconds = RateLimiter::availableIn($rateLimitKey);
-            $minutes = ceil($seconds / 60);
+            $minutes = ceil($seconds / 30);
             return response()->json([
                 'message' => "Too many OTP requests. Please wait {$minutes} minutes before trying again.",
             ], 429);
         }
 
-        RateLimiter::hit($rateLimitKey, 3600); // 1 hour lockout window
+        RateLimiter::hit($rateLimitKey, 1700); // 1 hour lockout window
 
         // Generate a cryptographically secure 6-digit OTP
         $otp = (string) random_int(100000, 999999);
@@ -225,6 +225,7 @@ class GuardAuthController extends Controller
                 'phone' => $guard->phone,
                 'employee_id' => $guard->employee_id,
                 'avatar_url' => $guard->avatar_url,
+                'tenant' => $guard->tenant ? ['name' => $guard->tenant->name] : null,
             ],
         ]);
     }
@@ -235,7 +236,7 @@ class GuardAuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         return response()->json([
-            'guard' => $request->user(),
+            'guard' => $request->user()->load('tenant'),
         ]);
     }
 }

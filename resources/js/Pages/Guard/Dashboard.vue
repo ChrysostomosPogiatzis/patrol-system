@@ -94,8 +94,9 @@ onMounted(() => {
                     </svg>
                 </div>
                 <div>
+                    <span v-if="guard.tenant?.name" class="block text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1.5">{{ guard.tenant.name }}</span>
                     <h2 class="text-lg font-bold text-slate-100">{{ guard.full_name }}</h2>
-                    <p class="text-xs text-indigo-400 font-mono font-medium tracking-wide">ID: {{ guard.employee_id || 'GD-007' }}</p>
+                    <p class="text-xs text-slate-400 font-mono font-medium tracking-wide">ID: {{ guard.employee_id || 'GD-007' }}</p>
                 </div>
             </div>
             
