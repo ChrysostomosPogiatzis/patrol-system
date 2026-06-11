@@ -15,7 +15,7 @@ const emit = defineEmits<{
     (e: 'logout'): void;
 }>();
 
-const { isOnline, queue, isSyncing, triggerSync, toggleOnline } = useOfflineSync();
+const { isOnline, queue, isSyncing, triggerSync } = useOfflineSync();
 const { batteryPct, updateLocation } = useGeolocation();
 
 // Periodic battery update
@@ -78,10 +78,9 @@ onUnmounted(() => {
                     <span class="text-xs font-mono">{{ batteryPct !== null ? `${batteryPct}%` : '---' }}</span>
                 </div>
 
-                <!-- Online Status Tag (Togglable) -->
+                <!-- Online Status Tag -->
                 <div 
-                    @click="toggleOnline"
-                    class="px-2 py-0.5 rounded-full flex items-center space-x-1.5 bg-slate-950/80 border text-[10px] font-semibold tracking-wide cursor-pointer active:scale-95 transition-all select-none"
+                    class="px-2 py-0.5 rounded-full flex items-center space-x-1.5 bg-slate-950/80 border text-[10px] font-semibold tracking-wide"
                     :class="isOnline ? 'border-emerald-500/20 text-emerald-400' : 'border-amber-500/20 text-amber-400'"
                 >
                     <span class="w-1.5 h-1.5 rounded-full" :class="isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'"></span>
