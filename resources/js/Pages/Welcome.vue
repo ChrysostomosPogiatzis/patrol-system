@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
+import { onMounted } from 'vue';
+import { CapacitorBridge } from '@/Services/CapacitorBridge';
 
 defineProps<{
     canLogin?: boolean;
@@ -7,6 +9,12 @@ defineProps<{
     laravelVersion: string;
     phpVersion: string;
 }>();
+
+onMounted(() => {
+    if (CapacitorBridge.isNative()) {
+        router.visit('/guard');
+    }
+});
 
 function handleImageError() {
     document.getElementById('screenshot-container')?.classList.add('!hidden');
