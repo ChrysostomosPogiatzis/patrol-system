@@ -297,10 +297,10 @@ async function startScan(method: 'qr' | 'nfc') {
                 });
                 if (result && result.ScanResult) {
                     const decodedText = result.ScanResult;
-                    if (decodedText.trim() === expectedCode.trim()) {
+                    if (decodedText.trim().toLowerCase() === expectedCode.trim().toLowerCase()) {
                         executeScan('qr', sigData, decodedText);
                     } else {
-                        alert(`Scanned code "${decodedText}" does not match the expected checkpoint QR code.`);
+                        alert(`Scanned code "${decodedText}" does not match the expected checkpoint QR code ("${expectedCode}").`);
                     }
                 }
             } catch (e: any) {
@@ -345,12 +345,12 @@ function startWebcamQrScanner(signatureBase64: string | null) {
                     qrbox: { width: 220, height: 220 }
                 },
                 (decodedText: string) => {
-                    if (decodedText.trim() === expectedCode.trim()) {
+                    if (decodedText.trim().toLowerCase() === expectedCode.trim().toLowerCase()) {
                         stopQrScanner();
                         showScanSimulator.value = false;
                         executeScan('qr', signatureBase64, decodedText);
                     } else {
-                        alert(`Scanned code "${decodedText}" does not match the expected checkpoint QR code.`);
+                        alert(`Scanned code "${decodedText}" does not match the expected checkpoint QR code ("${expectedCode}").`);
                     }
                 },
                 (errorMessage: string) => {}
@@ -609,6 +609,8 @@ async function executeScan(method: 'qr' | 'nfc', signatureBase64: string | null,
             log.scan_method_used = method;
             log.note = checkpointNote.value;
             props.activePatrol.completed_checkpoints++;
+
+            alert(`✅ SUCCESS: Checkpoint "${log.checkpoint.name}" scanned successfully.`);
         } catch (e: any) {
             console.error('Direct scan failed, queuing offline:', e);
             queueOfflineScan(log, payload, method, signatureBase64);
@@ -648,6 +650,8 @@ function queueOfflineScan(log: CheckpointLog, payload: any, method: string, sign
     log.scan_method_used = method;
     log.note = checkpointNote.value;
     props.activePatrol.completed_checkpoints++;
+
+    alert(`💾 OFFLINE SAVED: Checkpoint "${log.checkpoint.name}" scanned offline. It will synchronize automatically when connection is restored.`);
 }
 
 async function executeSkip() {
