@@ -28,6 +28,11 @@ interface Incident {
     checkpoint?: { name: string };
     location?: { name: string };
     tenant?: { name: string };
+    media?: Array<{
+        id: number;
+        file_url: string;
+        kind: string;
+    }>;
 }
 
 interface CheckpointLog {
@@ -41,6 +46,11 @@ interface CheckpointLog {
         name: string;
         description: string;
     };
+    media?: Array<{
+        id: number;
+        file_url: string;
+        kind: string;
+    }>;
 }
 
 interface Patrol {
@@ -104,9 +114,10 @@ onMounted(() => {
 });
 
 function formatDuration(seconds?: number): string {
-    if (!seconds) return 'N/A';
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
+    if (seconds === undefined || seconds === null) return 'N/A';
+    const cleanSeconds = Math.max(0, seconds);
+    const h = Math.floor(cleanSeconds / 3600);
+    const m = Math.floor((cleanSeconds % 3600) / 60);
     if (h > 0) return `${h}h ${m}m`;
     return `${m} mins`;
 }
@@ -298,6 +309,18 @@ function getPriorityClass(priority: string) {
                                         </span>
                                     </div>
                                     <p class="text-[11px] text-slate-500 mt-1">{{ inc.description || 'No description provided.' }}</p>
+                                    <!-- Incident Photos -->
+                                    <div v-if="inc.media && inc.media.length > 0" class="flex flex-wrap gap-2 mt-2">
+                                        <a 
+                                            v-for="m in inc.media" 
+                                            :key="m.id" 
+                                            :href="m.file_url"
+                                            target="_blank"
+                                            class="w-16 h-16 border border-slate-200 rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity"
+                                        >
+                                            <img :src="m.file_url" alt="Incident Media" class="object-cover w-full h-full" />
+                                        </a>
+                                    </div>
                                     <div class="flex items-center space-x-2 mt-1.5 text-[9px] text-slate-400 font-bold font-mono">
                                         <span v-if="inc.checkpoint">Checkpoint: {{ inc.checkpoint.name }}</span>
                                     </div>
@@ -356,6 +379,18 @@ function getPriorityClass(priority: string) {
 
                     <div class="text-xs text-slate-650 space-y-2">
                         <p>{{ inc.description || 'No description provided.' }}</p>
+                        <!-- Incident Photos -->
+                        <div v-if="inc.media && inc.media.length > 0" class="flex flex-wrap gap-2 py-1">
+                            <a 
+                                v-for="m in inc.media" 
+                                :key="m.id" 
+                                :href="m.file_url"
+                                target="_blank"
+                                class="w-20 h-20 border border-slate-200 rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity"
+                            >
+                                <img :src="m.file_url" alt="Incident Media" class="object-cover w-full h-full" />
+                            </a>
+                        </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10px] text-slate-450 font-mono font-bold uppercase">
                             <div>Site Location: {{ inc.location?.name || 'N/A' }}</div>
                             <div>Checkpoint: {{ inc.checkpoint?.name || 'General Route Incident' }}</div>
@@ -436,6 +471,21 @@ function getPriorityClass(priority: string) {
                                 <div v-if="log.note" class="space-y-1 border-t border-slate-200/50 pt-1.5 mt-1">
                                     <span class="block text-[8px] font-black uppercase tracking-wider text-slate-450 font-mono">Checkpoint Note:</span>
                                     <p class="text-[10px] text-slate-650">{{ log.note }}</p>
+                                </div>
+                                <!-- Scanned Photo / Media -->
+                                <div v-if="log.media && log.media.length > 0" class="space-y-1.5 border-t border-slate-200/50 pt-1.5 mt-1">
+                                    <span class="block text-[8px] font-black uppercase tracking-wider text-slate-450 font-mono">Scanned Photos:</span>
+                                    <div class="flex flex-wrap gap-2 mt-1">
+                                        <a 
+                                            v-for="m in log.media" 
+                                            :key="m.id" 
+                                            :href="m.file_url"
+                                            target="_blank"
+                                            class="w-20 h-20 border border-slate-200 rounded-lg overflow-hidden bg-slate-100 flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity"
+                                        >
+                                            <img :src="m.file_url" alt="Checkpoint media" class="object-cover w-full h-full" />
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         </div>

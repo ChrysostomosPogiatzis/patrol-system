@@ -472,7 +472,7 @@ class PatrolController extends Controller
         // Complete the patrol
         $startedAt = $patrol->started_at;
         $completedAt = now();
-        $duration = $completedAt->diffInSeconds($startedAt);
+        $duration = max(0, (int) $completedAt->diffInSeconds($startedAt));
 
         $signaturePath = null;
         if ($request->hasFile('completion_signature')) {

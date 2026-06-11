@@ -95,10 +95,11 @@ function closeDetail() {
 }
 
 function formatDuration(seconds?: number): string {
-    if (!seconds) return '—';
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
+    if (seconds === undefined || seconds === null) return '—';
+    const cleanSeconds = Math.max(0, seconds);
+    const h = Math.floor(cleanSeconds / 3600);
+    const m = Math.floor((cleanSeconds % 3600) / 60);
+    const s = cleanSeconds % 60;
     if (h > 0) return `${h}h ${m}m`;
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;

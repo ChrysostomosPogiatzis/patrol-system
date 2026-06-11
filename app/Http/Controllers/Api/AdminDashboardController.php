@@ -607,7 +607,9 @@ class AdminDashboardController extends Controller
             'incidents.securityGuard',
             'incidents.checkpoint',
             'incidents.location',
-            'checkpointLogs.checkpoint'
+            'incidents.media',
+            'checkpointLogs.checkpoint',
+            'checkpointLogs.media'
         ])->orderBy('started_at', 'desc');
 
         if ($guardId) {
@@ -619,7 +621,7 @@ class AdminDashboardController extends Controller
         $patrols = $patrolQuery->get();
 
         // Incident Query for Standalone view
-        $incidentQuery = Incident::with(['securityGuard', 'checkpoint', 'location', 'patrol', 'tenant'])
+        $incidentQuery = Incident::with(['securityGuard', 'checkpoint', 'location', 'patrol', 'tenant', 'media'])
             ->orderBy('created_at', 'desc');
 
         if ($guardId) {
