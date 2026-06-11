@@ -223,7 +223,7 @@ class SyncController extends Controller
                     $decoded = base64_decode($base64Data);
                     $filename = uniqid() . '_' . ($mediaItem['filename'] ?? 'photo.jpg');
                     $path = "tenants/{$guard->tenant_id}/incidents/{$incident->id}/{$filename}";
-                    Storage::disk('local')->put($path, $decoded);
+                    Storage::disk('public')->put($path, $decoded);
 
                     IncidentMedia::create([
                         'tenant_id' => $guard->tenant_id,
@@ -261,7 +261,7 @@ class SyncController extends Controller
             $decoded = base64_decode($base64Data);
             $filename = uniqid() . '_' . ($payload['filename'] ?? 'photo.jpg');
             $path = "tenants/{$guard->tenant_id}/patrols/{$log->patrol_id}/{$filename}";
-            Storage::disk('local')->put($path, $decoded);
+            Storage::disk('public')->put($path, $decoded);
 
             CheckpointMedia::create([
                 'tenant_id' => $guard->tenant_id,

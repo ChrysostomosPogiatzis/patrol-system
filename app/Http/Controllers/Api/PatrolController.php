@@ -299,8 +299,8 @@ class PatrolController extends Controller
         // 4. Handle media file upload
         if ($request->hasFile('media_file')) {
             $file = $request->file('media_file');
-            // Store file securely in a non-public/private location
-            $path = $file->store("tenants/{$guard->tenant_id}/patrols/{$patrol->id}", 'local');
+            // Store file securely in a public location
+            $path = $file->store("tenants/{$guard->tenant_id}/patrols/{$patrol->id}", 'public');
 
             CheckpointMedia::create([
                 'tenant_id' => $guard->tenant_id,
@@ -477,7 +477,7 @@ class PatrolController extends Controller
         $signaturePath = null;
         if ($request->hasFile('completion_signature')) {
             $file = $request->file('completion_signature');
-            $signaturePath = $file->store("tenants/{$guard->tenant_id}/patrols/{$patrol->id}/signatures", 'local');
+            $signaturePath = $file->store("tenants/{$guard->tenant_id}/patrols/{$patrol->id}/signatures", 'public');
         }
 
         $patrol->update([

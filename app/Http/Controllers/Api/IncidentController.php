@@ -74,7 +74,7 @@ class IncidentController extends Controller
         // Process uploaded attachments
         if ($request->hasFile('media_files')) {
             foreach ($request->file('media_files') as $file) {
-                $path = $file->store("tenants/{$guard->tenant_id}/incidents/{$incident->id}", 'local');
+                $path = $file->store("tenants/{$guard->tenant_id}/incidents/{$incident->id}", 'public');
 
                 IncidentMedia::create([
                     'tenant_id' => $guard->tenant_id,
@@ -138,7 +138,7 @@ class IncidentController extends Controller
 
         if ($request->hasFile('media_files')) {
             foreach ($request->file('media_files') as $file) {
-                $path = $file->store("tenants/{$guard->tenant_id}/incidents/{$incident->id}", 'local');
+                $path = $file->store("tenants/{$guard->tenant_id}/incidents/{$incident->id}", 'public');
 
                 IncidentMedia::create([
                     'tenant_id' => $guard->tenant_id,
