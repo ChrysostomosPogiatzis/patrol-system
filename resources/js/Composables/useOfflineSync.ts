@@ -150,7 +150,7 @@ export function useOfflineSync() {
 
         // Listen for status changes
         try {
-            networkListener = await Network.addListener('networkStatusChange', (status) => {
+            networkListener = await Network.addListener('networkStatusChange', (status: any) => {
                 updateOnlineStatus(status.connected);
             });
         } catch (e) {
