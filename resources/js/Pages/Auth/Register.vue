@@ -53,7 +53,7 @@ const submit = () => {
                     class="mt-1 block w-full"
                     v-model="form.company_name"
                     required
-                    placeholder="e.g. Sentinel Guard Services"
+                    placeholder="e.g. Witbo Guard Services"
                 />
 
                 <InputError class="mt-2" :message="form.errors.company_name" />

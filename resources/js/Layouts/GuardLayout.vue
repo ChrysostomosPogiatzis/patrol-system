@@ -62,7 +62,7 @@ onUnmounted(() => {
                 </div>
                 <div>
                     <h1 class="text-sm font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-violet-400">
-                         SENTINEL
+                         WITBO
                     </h1>
                     <p class="text-[10px] text-slate-400 font-mono tracking-widest leading-none">PATROL SYSTEM</p>
                 </div>

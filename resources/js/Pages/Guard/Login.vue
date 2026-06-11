@@ -98,7 +98,7 @@ function handleOtpInputChange() {
                     </svg>
                 </div>
                 <h1 class="text-2xl font-black tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-slate-100 via-indigo-300 to-slate-100">
-                    SENTINEL PATROL
+                    WITBO PATROL
                 </h1>
                 <p class="text-xs text-slate-400 mt-1 uppercase tracking-widest font-mono">SaaS Guard Gateway</p>
             </div>
