@@ -3,6 +3,8 @@ import { ref } from 'vue';
 import axios from 'axios';
 import { useOfflineSync } from '@/Composables/useOfflineSync';
 import { useGeolocation } from '@/Composables/useGeolocation';
+import { CapacitorBridge } from '@/Services/CapacitorBridge';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 
 const props = defineProps<{
     guard: any;
@@ -26,31 +28,48 @@ const isSubmitting = ref(false);
 const showSuccessToast = ref(false);
 const errorMsg = ref<string | null>(null);
 
-// Simulate taking photo
-function handleCapturePhoto() {
-    const canvas = document.createElement('canvas');
-    canvas.width = 640;
-    canvas.height = 480;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-        // Background gradient
-        const grad = ctx.createLinearGradient(0, 0, 640, 480);
-        grad.addColorStop(0, '#7f1d1d'); // Dark Red
-        grad.addColorStop(1, '#0f172a');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 640, 480);
-        
-        ctx.fillStyle = '#f87171';
-        ctx.font = 'bold 24px sans-serif';
-        ctx.fillText('INCIDENT EVIDENCE SNAPSHOT', 50, 100);
-        
-        ctx.fillStyle = '#cbd5e1';
-        ctx.font = '16px sans-serif';
-        ctx.fillText(`Title: ${title.value || 'Untitled Incident'}`, 50, 150);
-        ctx.fillText(`Priority: ${priority.value.toUpperCase()}`, 50, 180);
-        ctx.fillText(`Timestamp: ${new Date().toLocaleString()}`, 50, 210);
-        
-        photos.value.push(canvas.toDataURL('image/jpeg'));
+const fileInputRef = ref<HTMLInputElement | null>(null);
+
+// Capture real photo using Capacitor camera or browser file fallback
+async function handleCapturePhoto() {
+    if (CapacitorBridge.isNative()) {
+        try {
+            const image = await Camera.getPhoto({
+                quality: 85,
+                allowEditing: false,
+                resultType: CameraResultType.DataUrl,
+                source: CameraSource.Camera
+            });
+            if (image && image.dataUrl) {
+                photos.value.push(image.dataUrl);
+            }
+        } catch (error: any) {
+            console.error("Capacitor camera failed:", error);
+            triggerWebCameraInput();
+        }
+    } else {
+        triggerWebCameraInput();
+    }
+}
+
+function triggerWebCameraInput() {
+    if (fileInputRef.value) {
+        fileInputRef.value.click();
+    }
+}
+
+function handleFileUploaded(e: Event) {
+    const target = e.target as HTMLInputElement;
+    if (target.files) {
+        Array.from(target.files).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                if (event.target && event.target.result) {
+                    photos.value.push(event.target.result as string);
+                }
+            };
+            reader.readAsDataURL(file);
+        });
     }
 }
 
@@ -249,21 +268,31 @@ function handleSuccessReset() {
                 ></textarea>
             </div>
 
-            <!-- Simulated Multi-media Photo Capture -->
+            <!-- Real Multi-media Photo Capture -->
             <div class="space-y-3">
                 <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Media Evidence (Photos)</label>
                 
+                <input 
+                    ref="fileInputRef"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    class="hidden"
+                    multiple
+                    @change="handleFileUploaded"
+                />
+
                 <div class="flex items-center space-x-3">
                     <button 
                         @click="handleCapturePhoto" 
                         type="button"
-                        class="py-2.5 px-4 bg-slate-850 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-bold rounded-xl active:scale-95 transition-all flex items-center space-x-2"
+                        class="py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl active:scale-95 transition-all flex items-center space-x-2 shadow-md"
                     >
-                        <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
-                        <span>Simulate Camera Photo</span>
+                        <span>Take Incident Photo</span>
                     </button>
                     <span class="text-[10px] text-slate-500 font-mono">{{ photos.length }} attachments loaded</span>
                 </div>
