@@ -1,9 +1,13 @@
-import { ref, onMounted, onUnmounted, readonly } from 'vue';
-import axios from 'axios';
 import { Network } from '@capacitor/network';
+import axios from 'axios';
+import { onMounted, onUnmounted, readonly, ref } from 'vue';
 
 export interface QueueItem {
-    entity_type: 'patrol_checkpoint_log' | 'incident' | 'checkpoint_media' | 'guard_location_ping';
+    entity_type:
+        | 'patrol_checkpoint_log'
+        | 'incident'
+        | 'checkpoint_media'
+        | 'guard_location_ping';
     entity_id: string; // local client UUID
     payload: any;
     captured_at: string;
@@ -24,7 +28,10 @@ function loadQueue() {
             queue.value = JSON.parse(data);
         }
     } catch (e) {
-        console.error('Failed to load offline sync queue from localStorage:', e);
+        console.error(
+            'Failed to load offline sync queue from localStorage:',
+            e,
+        );
     }
 }
 
@@ -32,7 +39,10 @@ function loadQueue() {
 function saveQueue() {
     if (typeof window === 'undefined') return;
     try {
-        localStorage.setItem('patrol_offline_sync_queue', JSON.stringify(queue.value));
+        localStorage.setItem(
+            'patrol_offline_sync_queue',
+            JSON.stringify(queue.value),
+        );
     } catch (e) {
         console.error('Failed to save offline sync queue to localStorage:', e);
     }
@@ -40,7 +50,11 @@ function saveQueue() {
 
 // Helper to generate UUIDv4
 export function generateUUID(): string {
-    if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
+    if (
+        typeof window !== 'undefined' &&
+        window.crypto &&
+        window.crypto.randomUUID
+    ) {
         return window.crypto.randomUUID();
     }
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
@@ -51,14 +65,13 @@ export function generateUUID(): string {
 }
 
 export function useOfflineSync() {
-
     // Add item to offline queue
     function addToQueue(entityType: QueueItem['entity_type'], payload: any) {
         const item: QueueItem = {
             entity_type: entityType,
             entity_id: generateUUID(),
             payload,
-            captured_at: new Date().toISOString()
+            captured_at: new Date().toISOString(),
         };
 
         queue.value.push(item);
@@ -95,15 +108,21 @@ export function useOfflineSync() {
             }
 
             const response = await axios.post('/api/guard/sync', {
-                queue: queue.value
+                queue: queue.value,
             });
 
             if (response.data && response.data.results) {
-                const results: Array<{ entity_id: string, status: string, error?: string }> = response.data.results;
+                const results: Array<{
+                    entity_id: string;
+                    status: string;
+                    error?: string;
+                }> = response.data.results;
 
                 // Filter out successfully processed/acknowledged items (even if failed on backend processing)
-                const processedIds = new Set(results.map(r => r.entity_id));
-                queue.value = queue.value.filter(item => !processedIds.has(item.entity_id));
+                const processedIds = new Set(results.map((r) => r.entity_id));
+                queue.value = queue.value.filter(
+                    (item) => !processedIds.has(item.entity_id),
+                );
                 saveQueue();
 
                 lastSyncTime.value = new Date().toLocaleTimeString();
@@ -114,7 +133,10 @@ export function useOfflineSync() {
             }
         } catch (error: any) {
             console.error('Offline synchronization failed:', error);
-            syncError.value = error.response?.data?.message || error.message || 'Sync failed.';
+            syncError.value =
+                error.response?.data?.message ||
+                error.message ||
+                'Sync failed.';
             isSyncing.value = false;
             return false;
         }
@@ -129,12 +151,12 @@ export function useOfflineSync() {
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 3000);
-            
+
             // Fetch a tiny asset with a cache-busting query parameter
-            await fetch(`/favicon.ico?_=${Date.now()}`, { 
-                method: 'HEAD', 
+            await fetch(`/favicon.ico?_=${Date.now()}`, {
+                method: 'HEAD',
                 signal: controller.signal,
-                cache: 'no-store'
+                cache: 'no-store',
             });
             clearTimeout(timeoutId);
             return true;
@@ -148,7 +170,7 @@ export function useOfflineSync() {
         if (connected) {
             actualOnline = await checkInternetAvailability();
         }
-        
+
         const nextState = actualOnline;
         const changed = isOnline.value !== nextState;
         isOnline.value = nextState;
@@ -175,14 +197,21 @@ export function useOfflineSync() {
 
         // Listen for status changes
         try {
-            networkListener = await Network.addListener('networkStatusChange', async (status: any) => {
-                await updateOnlineStatus(status.connected);
-            });
+            networkListener = await Network.addListener(
+                'networkStatusChange',
+                async (status: any) => {
+                    await updateOnlineStatus(status.connected);
+                },
+            );
         } catch (e) {
             // Fallback to standard web listeners
             if (typeof window !== 'undefined') {
-                window.addEventListener('online', () => updateOnlineStatus(true));
-                window.addEventListener('offline', () => updateOnlineStatus(false));
+                window.addEventListener('online', () =>
+                    updateOnlineStatus(true),
+                );
+                window.addEventListener('offline', () =>
+                    updateOnlineStatus(false),
+                );
             }
         }
 
@@ -193,7 +222,8 @@ export function useOfflineSync() {
                 const status = await Network.getStatus();
                 connected = status.connected;
             } catch (e) {
-                connected = typeof navigator !== 'undefined' ? navigator.onLine : false;
+                connected =
+                    typeof navigator !== 'undefined' ? navigator.onLine : false;
             }
             await updateOnlineStatus(connected);
         }, 10000);
@@ -221,6 +251,6 @@ export function useOfflineSync() {
         syncError: readonly(syncError),
         addToQueue,
         triggerSync,
-        clearQueue
+        clearQueue,
     };
 }

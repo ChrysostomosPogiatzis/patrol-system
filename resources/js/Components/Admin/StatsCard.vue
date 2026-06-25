@@ -1,13 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-const props = withDefaults(defineProps<{
-    title: string;
-    value: string | number;
-    color?: 'indigo' | 'emerald' | 'amber' | 'sky' | 'rose';
-}>(), {
-    color: 'indigo'
-});
+const props = withDefaults(
+    defineProps<{
+        title: string;
+        value: string | number;
+        color?: 'indigo' | 'emerald' | 'amber' | 'sky' | 'rose';
+    }>(),
+    {
+        color: 'indigo',
+    },
+);
 
 const colorClasses = computed(() => {
     switch (props.color) {
@@ -17,7 +20,7 @@ const colorClasses = computed(() => {
                 text: 'text-emerald-500 dark:text-emerald-400',
                 border: 'border-emerald-500/20 dark:border-emerald-500/30',
                 gradient: 'from-emerald-500 to-teal-600',
-                glow: 'shadow-emerald-500/10'
+                glow: 'shadow-emerald-500/10',
             };
         case 'amber':
             return {
@@ -25,7 +28,7 @@ const colorClasses = computed(() => {
                 text: 'text-amber-500 dark:text-amber-400',
                 border: 'border-amber-500/20 dark:border-amber-500/30',
                 gradient: 'from-amber-500 to-orange-600',
-                glow: 'shadow-amber-500/10'
+                glow: 'shadow-amber-500/10',
             };
         case 'sky':
             return {
@@ -33,7 +36,7 @@ const colorClasses = computed(() => {
                 text: 'text-sky-500 dark:text-sky-400',
                 border: 'border-sky-500/20 dark:border-sky-500/30',
                 gradient: 'from-sky-500 to-indigo-600',
-                glow: 'shadow-sky-500/10'
+                glow: 'shadow-sky-500/10',
             };
         case 'rose':
             return {
@@ -41,7 +44,7 @@ const colorClasses = computed(() => {
                 text: 'text-rose-500 dark:text-rose-400',
                 border: 'border-rose-500/20 dark:border-rose-500/30',
                 gradient: 'from-rose-500 to-red-600',
-                glow: 'shadow-rose-500/10'
+                glow: 'shadow-rose-500/10',
             };
         case 'indigo':
         default:
@@ -50,23 +53,33 @@ const colorClasses = computed(() => {
                 text: 'text-indigo-500 dark:text-indigo-400',
                 border: 'border-indigo-500/20 dark:border-indigo-500/30',
                 gradient: 'from-indigo-500 to-purple-600',
-                glow: 'shadow-indigo-500/10'
+                glow: 'shadow-indigo-500/10',
             };
     }
 });
 </script>
 
 <template>
-    <div class="bg-white border border-slate-200/80 rounded-2xl p-4 flex items-center justify-between transition-all duration-300 hover:scale-[1.02] hover:shadow-md shadow-sm" :class="colorClasses.glow">
+    <div
+        class="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm transition-all duration-300 hover:scale-[1.02] hover:shadow-md"
+        :class="colorClasses.glow"
+    >
         <div class="space-y-1">
-            <span class="text-[10px] font-black uppercase tracking-widest text-slate-450 block">
+            <span
+                class="text-slate-450 block text-[10px] font-black uppercase tracking-widest"
+            >
                 {{ title }}
             </span>
-            <span class="text-3xl font-black font-mono text-slate-800 leading-none">
+            <span
+                class="font-mono text-3xl font-black leading-none text-slate-800"
+            >
                 {{ value }}
             </span>
         </div>
-        <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white bg-gradient-to-br shadow-md" :class="colorClasses.gradient">
+        <div
+            class="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-md"
+            :class="colorClasses.gradient"
+        >
             <slot />
         </div>
     </div>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface Checkpoint {
     id: number;
@@ -69,7 +69,8 @@ function loadLeaflet(): Promise<void> {
         const script = document.createElement('script');
         script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
         script.onload = () => resolve();
-        script.onerror = () => reject(new Error('Leaflet library failed to load.'));
+        script.onerror = () =>
+            reject(new Error('Leaflet library failed to load.'));
         document.head.appendChild(script);
     });
 }
@@ -86,7 +87,9 @@ function initMap() {
     let zoomLevel = 13;
 
     // Center on the first location that has valid coordinates
-    const firstValidLoc = props.locations.find(loc => loc.latitude && loc.longitude);
+    const firstValidLoc = props.locations.find(
+        (loc) => loc.latitude && loc.longitude,
+    );
     if (firstValidLoc) {
         centerLat = Number(firstValidLoc.latitude);
         centerLon = Number(firstValidLoc.longitude);
@@ -96,15 +99,19 @@ function initMap() {
     mapInstance = L.map(mapContainer.value, {
         center: [centerLat, centerLon],
         zoom: zoomLevel,
-        zoomControl: true
+        zoomControl: true,
     });
 
     // Dark-themed premium map style from CartoDB
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 20
-    }).addTo(mapInstance);
+    L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        {
+            attribution:
+                '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20,
+        },
+    ).addTo(mapInstance);
 
     markersLayerGroup = L.layerGroup().addTo(mapInstance);
     geofenceLayerGroup = L.layerGroup().addTo(mapInstance);
@@ -120,7 +127,14 @@ function clearGuardSelection() {
 
 function renderLayers() {
     const L = (window as any).L;
-    if (!L || !mapInstance || !markersLayerGroup || !geofenceLayerGroup || !polylineLayerGroup) return;
+    if (
+        !L ||
+        !mapInstance ||
+        !markersLayerGroup ||
+        !geofenceLayerGroup ||
+        !polylineLayerGroup
+    )
+        return;
 
     // Clear existing
     markersLayerGroup.clearLayers();
@@ -128,7 +142,7 @@ function renderLayers() {
     polylineLayerGroup.clearLayers();
 
     // 1. Draw Location Pins and Geofences
-    props.locations.forEach(loc => {
+    props.locations.forEach((loc) => {
         if (!loc.latitude || !loc.longitude) return;
 
         const lat = Number(loc.latitude);
@@ -140,12 +154,12 @@ function renderLayers() {
             fillColor: '#818cf8', // Indigo 400
             fillOpacity: 0.15,
             radius: loc.geofence_radius || 50,
-            weight: 1.5
+            weight: 1.5,
         }).addTo(geofenceLayerGroup);
 
         // Draw Site Checkpoints
         if (loc.checkpoints && loc.checkpoints.length > 0) {
-            loc.checkpoints.forEach(cp => {
+            loc.checkpoints.forEach((cp) => {
                 if (!cp.latitude || !cp.longitude) return;
                 const cpLat = Number(cp.latitude);
                 const cpLon = Number(cp.longitude);
@@ -156,14 +170,15 @@ function renderLayers() {
                     color: '#6366f1', // Indigo 500
                     fillColor: '#ffffff',
                     fillOpacity: 1,
-                    weight: 2
+                    weight: 2,
                 })
-                .bindTooltip(cp.name, {
-                    permanent: false,
-                    direction: 'top',
-                    className: 'font-mono text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-slate-200'
-                })
-                .addTo(markersLayerGroup);
+                    .bindTooltip(cp.name, {
+                        permanent: false,
+                        direction: 'top',
+                        className:
+                            'font-mono text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm border border-slate-200',
+                    })
+                    .addTo(markersLayerGroup);
             });
         }
 
@@ -180,7 +195,7 @@ function renderLayers() {
             html: siteIconHtml,
             className: 'custom-leaflet-icon',
             iconSize: [32, 32],
-            iconAnchor: [16, 16]
+            iconAnchor: [16, 16],
         });
 
         // Checkpoints popup details
@@ -190,12 +205,16 @@ function renderLayers() {
                 <div class="mt-2.5 pt-2.5 border-t border-slate-100">
                     <span class="block text-[9px] font-black uppercase tracking-wider text-slate-440 font-mono mb-1.5">Checkpoints (${loc.checkpoints.length})</span>
                     <ul class="space-y-1 pl-0 list-none m-0">
-                        ${loc.checkpoints.map(cp => `
+                        ${loc.checkpoints
+                            .map(
+                                (cp) => `
                             <li class="text-[10px] text-slate-650 flex items-center gap-1.5 font-bold">
                                 <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
                                 <span>${cp.name}</span>
                             </li>
-                        `).join('')}
+                        `,
+                            )
+                            .join('')}
                     </ul>
                 </div>
             `;
@@ -222,16 +241,18 @@ function renderLayers() {
     });
 
     // 2. Draw Guards Live/Last-seen Coordinates
-    props.guardLocations.forEach(ping => {
+    props.guardLocations.forEach((ping) => {
         if (!ping.latitude || !ping.longitude) return;
 
         const lat = Number(ping.latitude);
         const lon = Number(ping.longitude);
 
         // Pulse effect for online guards
-        const statusColorClass = ping.is_online ? 'bg-emerald-500' : 'bg-slate-400';
-        const pulseEffectHtml = ping.is_online 
-            ? `<span class="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-60"></span>` 
+        const statusColorClass = ping.is_online
+            ? 'bg-emerald-500'
+            : 'bg-slate-400';
+        const pulseEffectHtml = ping.is_online
+            ? `<span class="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-60"></span>`
             : '';
 
         const guardIconHtml = `
@@ -247,10 +268,13 @@ function renderLayers() {
             html: guardIconHtml,
             className: 'custom-leaflet-icon',
             iconSize: [32, 32],
-            iconAnchor: [16, 16]
+            iconAnchor: [16, 16],
         });
 
-        const lastSeenDate = new Date(ping.pinged_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const lastSeenDate = new Date(ping.pinged_at).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+        });
 
         const popupContent = `
             <div class="p-1 min-w-[180px]">
@@ -289,14 +313,19 @@ function renderLayers() {
 
     // 3. Draw Selected Guard's Movement Path (last 24 hours)
     if (selectedGuardId.value) {
-        const pings = props.guardPings24h.filter(ping => ping.guard_id === selectedGuardId.value);
+        const pings = props.guardPings24h.filter(
+            (ping) => ping.guard_id === selectedGuardId.value,
+        );
         if (pings.length > 0) {
-            const coordinates = pings.map(p => [Number(p.latitude), Number(p.longitude)]);
+            const coordinates = pings.map((p) => [
+                Number(p.latitude),
+                Number(p.longitude),
+            ]);
             L.polyline(coordinates, {
                 color: '#ec4899', // Pink 500
                 weight: 3,
                 opacity: 0.85,
-                dashArray: '5, 5'
+                dashArray: '5, 5',
             }).addTo(polylineLayerGroup);
 
             // Also draw small starting/ending markers or dots along the path
@@ -307,10 +336,13 @@ function renderLayers() {
                         color: idx === 0 ? '#10b981' : '#ef4444', // Green for start, Red for end
                         fillColor: '#ffffff',
                         fillOpacity: 1,
-                        weight: 2
+                        weight: 2,
                     })
-                    .bindTooltip(idx === 0 ? 'Trail Start' : 'Last Location', { direction: 'top' })
-                    .addTo(polylineLayerGroup);
+                        .bindTooltip(
+                            idx === 0 ? 'Trail Start' : 'Last Location',
+                            { direction: 'top' },
+                        )
+                        .addTo(polylineLayerGroup);
                 }
             });
         }
@@ -318,9 +350,13 @@ function renderLayers() {
 }
 
 // Watch locations or guard pings updates
-watch(() => [props.locations, props.guardLocations, props.guardPings24h], () => {
-    renderLayers();
-}, { deep: true });
+watch(
+    () => [props.locations, props.guardLocations, props.guardPings24h],
+    () => {
+        renderLayers();
+    },
+    { deep: true },
+);
 
 onMounted(async () => {
     try {
@@ -343,52 +379,85 @@ onUnmounted(() => {
 </script>
 
 <template>
-    <div class="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-sm space-y-3">
-        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-            <h3 class="text-xs font-black uppercase tracking-wider text-slate-800 font-mono flex items-center gap-1.5">
+    <div
+        class="space-y-3 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm"
+    >
+        <div
+            class="flex items-center justify-between border-b border-slate-100 pb-3"
+        >
+            <h3
+                class="flex items-center gap-1.5 font-mono text-xs font-black uppercase tracking-wider text-slate-800"
+            >
                 <span class="relative flex h-2 w-2">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2 w-2 bg-indigo-600"></span>
+                    <span
+                        class="absolute inline-flex h-full w-full animate-ping rounded-full bg-indigo-400 opacity-75"
+                    ></span>
+                    <span
+                        class="relative inline-flex h-2 w-2 rounded-full bg-indigo-600"
+                    ></span>
                 </span>
                 <span>Live Operations Map</span>
             </h3>
-            <span class="text-[9px] text-slate-400 font-mono uppercase tracking-widest">Real-time Location Tracking</span>
+            <span
+                class="font-mono text-[9px] uppercase tracking-widest text-slate-400"
+                >Real-time Location Tracking</span
+            >
         </div>
 
         <!-- Guard Selection Alert -->
-        <div v-if="selectedGuardId" class="bg-indigo-50 border border-indigo-100/80 p-3 rounded-2xl flex items-center justify-between text-[11px] text-indigo-900 font-bold font-mono">
+        <div
+            v-if="selectedGuardId"
+            class="flex items-center justify-between rounded-2xl border border-indigo-100/80 bg-indigo-50 p-3 font-mono text-[11px] font-bold text-indigo-900"
+        >
             <span>Showing 24h movement trail for selected guard</span>
-            <button @click="clearGuardSelection" class="text-[10px] text-rose-600 hover:text-rose-500 uppercase tracking-widest font-black">
+            <button
+                @click="clearGuardSelection"
+                class="text-[10px] font-black uppercase tracking-widest text-rose-600 hover:text-rose-500"
+            >
                 Clear Trail
             </button>
         </div>
 
-        <div v-if="loadError" class="text-center py-10 text-xs text-rose-500 bg-rose-50/50 rounded-2xl border border-rose-100/80 font-mono">
+        <div
+            v-if="loadError"
+            class="rounded-2xl border border-rose-100/80 bg-rose-50/50 py-10 text-center font-mono text-xs text-rose-500"
+        >
             {{ loadError }}
         </div>
 
-        <div 
+        <div
             v-show="isMapLoaded"
             ref="mapContainer"
-            class="w-full h-[380px] rounded-2xl overflow-hidden border border-slate-200/80 bg-slate-50 z-10"
+            class="z-10 h-[380px] w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50"
         ></div>
 
         <!-- Map Legend -->
-        <div v-if="isMapLoaded && !loadError" class="flex flex-wrap gap-4 text-[10px] text-slate-500 font-mono font-bold uppercase tracking-wider pt-2 border-t border-slate-100">
+        <div
+            v-if="isMapLoaded && !loadError"
+            class="flex flex-wrap gap-4 border-t border-slate-100 pt-2 font-mono text-[10px] font-bold uppercase tracking-wider text-slate-500"
+        >
             <div class="flex items-center gap-1.5">
-                <span class="w-2.5 h-2.5 rounded-full bg-indigo-600 border border-white shadow-xs"></span>
+                <span
+                    class="shadow-xs h-2.5 w-2.5 rounded-full border border-white bg-indigo-600"
+                ></span>
                 <span>Site Locations</span>
             </div>
             <div class="flex items-center gap-1.5">
-                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-white shadow-xs"></span>
+                <span
+                    class="shadow-xs h-2.5 w-2.5 rounded-full border border-white bg-emerald-500"
+                ></span>
                 <span>Guards (Online)</span>
             </div>
             <div class="flex items-center gap-1.5">
-                <span class="w-2.5 h-2.5 rounded-full bg-slate-400 border border-white shadow-xs"></span>
+                <span
+                    class="shadow-xs h-2.5 w-2.5 rounded-full border border-white bg-slate-400"
+                ></span>
                 <span>Guards (Offline)</span>
             </div>
             <div class="flex items-center gap-1.5">
-                <span class="w-4 h-2 rounded bg-indigo-100 border border-indigo-400 opacity-60"></span>
+                <span
+                    class="h-2 w-4 rounded border border-indigo-400 bg-indigo-100 opacity-60"
+                ></span>
                 <span>Geofence Boundaries</span>
             </div>
         </div>
@@ -400,7 +469,9 @@ onUnmounted(() => {
 .leaflet-popup-content-wrapper {
     border-radius: 16px !important;
     border: 1px solid rgba(226, 232, 240, 0.8) !important;
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02) !important;
+    box-shadow:
+        0 10px 15px -3px rgba(0, 0, 0, 0.05),
+        0 4px 6px -2px rgba(0, 0, 0, 0.02) !important;
 }
 .leaflet-popup-tip {
     border: 1px solid rgba(226, 232, 240, 0.8) !important;

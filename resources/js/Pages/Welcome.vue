@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import { CapacitorBridge } from '@/Services/CapacitorBridge';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { onMounted } from 'vue';
-import { CapacitorBridge } from '@/Services/CapacitorBridge';
 
 defineProps<{
     canLogin?: boolean;

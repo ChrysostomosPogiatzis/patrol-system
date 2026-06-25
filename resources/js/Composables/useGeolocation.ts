@@ -1,5 +1,5 @@
-import { ref } from 'vue';
 import axios from 'axios';
+import { ref } from 'vue';
 import { CapacitorBridge, GpsPosition } from '../Services/CapacitorBridge';
 import { useOfflineSync } from './useOfflineSync';
 
@@ -43,14 +43,17 @@ export function useGeolocation() {
             accuracy_m: pos.accuracy,
             battery_pct: batteryPct.value,
             is_online: isOnline.value,
-            patrol_id: activePatrolId.value
+            patrol_id: activePatrolId.value,
         };
 
         if (isOnline.value) {
             try {
                 await axios.post('/api/guard/location/ping', payload);
             } catch (error) {
-                console.warn('Failed to ping location online, queuing instead:', error);
+                console.warn(
+                    'Failed to ping location online, queuing instead:',
+                    error,
+                );
                 addToQueue('guard_location_ping', payload);
             }
         } else {
@@ -59,7 +62,10 @@ export function useGeolocation() {
     }
 
     // Start background tracking interval (every 60 seconds)
-    function startTracking(patrolId: number | null = null, intervalMs: number = 60000) {
+    function startTracking(
+        patrolId: number | null = null,
+        intervalMs: number = 60000,
+    ) {
         activePatrolId.value = patrolId;
         if (isTracking.value) {
             // Already tracking, just trigger an immediate ping to sync status/battery
@@ -94,7 +100,6 @@ export function useGeolocation() {
         updateLocation,
         pingLocation,
         startTracking,
-        stopTracking
+        stopTracking,
     };
 }
-

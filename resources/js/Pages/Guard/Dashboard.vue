@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import axios from 'axios';
 import { useOfflineSync } from '@/Composables/useOfflineSync';
+import axios from 'axios';
+import { onMounted, ref } from 'vue';
 
 interface Checkpoint {
     id: number;
@@ -53,7 +53,7 @@ async function fetchAssignedRoutes() {
         }
         return;
     }
-    
+
     isLoadingRoutes.value = true;
     errorMsg.value = null;
     try {
@@ -61,7 +61,10 @@ async function fetchAssignedRoutes() {
         if (response.data && response.data.routes) {
             routes.value = response.data.routes;
             // Cache them for offline use
-            localStorage.setItem('patrol_cached_routes', JSON.stringify(routes.value));
+            localStorage.setItem(
+                'patrol_cached_routes',
+                JSON.stringify(routes.value),
+            );
         }
     } catch (e: any) {
         console.error(e);
@@ -79,36 +82,77 @@ onMounted(() => {
 <template>
     <div class="space-y-6">
         <!-- Guard Profile Hero Card -->
-        <div class="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 border border-slate-800/80 rounded-3xl p-5 shadow-xl relative overflow-hidden">
-            <div class="absolute -right-10 -bottom-10 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl"></div>
+        <div
+            class="relative overflow-hidden rounded-3xl border border-slate-800/80 bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 p-5 shadow-xl"
+        >
+            <div
+                class="absolute -bottom-10 -right-10 h-32 w-32 rounded-full bg-indigo-500/10 blur-2xl"
+            ></div>
             <div class="flex items-center space-x-4">
-                <div class="w-14 h-14 rounded-2xl bg-slate-950 border border-slate-700/50 flex items-center justify-center shadow-lg relative overflow-hidden">
-                    <img 
-                        v-if="guard.avatar_url" 
-                        :src="guard.avatar_url" 
-                        class="w-full h-full object-cover" 
+                <div
+                    class="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-slate-700/50 bg-slate-950 shadow-lg"
+                >
+                    <img
+                        v-if="guard.avatar_url"
+                        :src="guard.avatar_url"
+                        class="h-full w-full object-cover"
                         alt="Avatar"
                     />
-                    <svg v-else class="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    <svg
+                        v-else
+                        class="h-8 w-8 text-indigo-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
                     </svg>
                 </div>
                 <div>
-                    <span v-if="guard.tenant?.name" class="block text-[10px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1.5">{{ guard.tenant.name }}</span>
-                    <h2 class="text-lg font-bold text-slate-100">{{ guard.full_name }}</h2>
-                    <p class="text-xs text-slate-400 font-mono font-medium tracking-wide">ID: {{ guard.employee_id || 'GD-007' }}</p>
+                    <span
+                        v-if="guard.tenant?.name"
+                        class="mb-1.5 block text-[10px] font-black uppercase leading-none tracking-widest text-indigo-400"
+                        >{{ guard.tenant.name }}</span
+                    >
+                    <h2 class="text-lg font-bold text-slate-100">
+                        {{ guard.full_name }}
+                    </h2>
+                    <p
+                        class="font-mono text-xs font-medium tracking-wide text-slate-400"
+                    >
+                        ID: {{ guard.employee_id || 'GD-007' }}
+                    </p>
                 </div>
             </div>
-            
-            <div class="mt-4 pt-4 border-t border-slate-800/80 flex justify-between text-center text-xs">
+
+            <div
+                class="mt-4 flex justify-between border-t border-slate-800/80 pt-4 text-center text-xs"
+            >
                 <div>
-                    <span class="block text-slate-500 font-bold uppercase tracking-wider text-[10px]">Location Scope</span>
-                    <span class="text-slate-300 font-semibold mt-0.5 block">Limassol Marina</span>
+                    <span
+                        class="block text-[10px] font-bold uppercase tracking-wider text-slate-500"
+                        >Location Scope</span
+                    >
+                    <span class="mt-0.5 block font-semibold text-slate-300"
+                        >Limassol Marina</span
+                    >
                 </div>
                 <div>
-                    <span class="block text-slate-500 font-bold uppercase tracking-wider text-[10px]">Status</span>
-                    <span class="text-emerald-400 font-bold mt-0.5 block flex items-center justify-center space-x-1">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span
+                        class="block text-[10px] font-bold uppercase tracking-wider text-slate-500"
+                        >Status</span
+                    >
+                    <span
+                        class="mt-0.5 block flex items-center justify-center space-x-1 font-bold text-emerald-400"
+                    >
+                        <span
+                            class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"
+                        ></span>
                         <span>ON DUTY</span>
                     </span>
                 </div>
@@ -116,93 +160,178 @@ onMounted(() => {
         </div>
 
         <!-- ACTIVE PATROL PROGRESS BLOCK -->
-        <div 
-            v-if="activePatrol" 
-            class="bg-indigo-950/40 backdrop-blur-md border border-indigo-500/30 rounded-3xl p-5 shadow-[0_0_20px_-3px_rgba(99,102,241,0.2)] animate-pulse-slow"
+        <div
+            v-if="activePatrol"
+            class="animate-pulse-slow rounded-3xl border border-indigo-500/30 bg-indigo-950/40 p-5 shadow-[0_0_20px_-3px_rgba(99,102,241,0.2)] backdrop-blur-md"
         >
-            <div class="flex items-center justify-between mb-3">
-                <span class="text-[10px] font-black tracking-widest text-indigo-400 uppercase">ACTIVE PATROL IN PROGRESS</span>
-                <span class="text-xs font-mono font-semibold bg-indigo-500/20 px-2 py-0.5 rounded text-indigo-300">
-                    {{ activePatrol.completed_checkpoints }}/{{ activePatrol.total_checkpoints }} Checked
+            <div class="mb-3 flex items-center justify-between">
+                <span
+                    class="text-[10px] font-black uppercase tracking-widest text-indigo-400"
+                    >ACTIVE PATROL IN PROGRESS</span
+                >
+                <span
+                    class="rounded bg-indigo-500/20 px-2 py-0.5 font-mono text-xs font-semibold text-indigo-300"
+                >
+                    {{ activePatrol.completed_checkpoints }}/{{
+                        activePatrol.total_checkpoints
+                    }}
+                    Checked
                 </span>
             </div>
-            <h3 class="text-base font-bold text-slate-100 mb-4">{{ activePatrol.route?.name || 'Port Security Route' }}</h3>
-            
+            <h3 class="mb-4 text-base font-bold text-slate-100">
+                {{ activePatrol.route?.name || 'Port Security Route' }}
+            </h3>
+
             <!-- Progress Bar -->
-            <div class="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden mb-5">
-                <div 
-                    class="bg-gradient-to-r from-indigo-500 to-violet-600 h-full rounded-full transition-all duration-500"
-                    :style="{ width: `${(activePatrol.completed_checkpoints / activePatrol.total_checkpoints) * 100}%` }"
+            <div
+                class="mb-5 h-2.5 w-full overflow-hidden rounded-full bg-slate-900"
+            >
+                <div
+                    class="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-600 transition-all duration-500"
+                    :style="{
+                        width: `${(activePatrol.completed_checkpoints / activePatrol.total_checkpoints) * 100}%`,
+                    }"
                 ></div>
             </div>
 
-            <button 
-                @click="emit('navigate', 'patrol')" 
-                class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-2xl shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center space-x-2 text-xs uppercase tracking-wider active:scale-98"
+            <button
+                @click="emit('navigate', 'patrol')"
+                class="active:scale-98 flex w-full items-center justify-center space-x-2 rounded-2xl bg-indigo-600 py-3.5 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-indigo-600/30 transition-all hover:bg-indigo-500"
             >
                 <span>Resume Active Patrol</span>
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                <svg
+                    class="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 5l7 7-7 7"
+                    />
                 </svg>
             </button>
         </div>
 
         <!-- ASSIGNED ROUTES -->
         <div v-else class="space-y-4">
-            <h3 class="text-xs font-black tracking-wider text-slate-400 uppercase pl-1">Assigned Patrol Routes</h3>
-            
-            <div v-if="isLoadingRoutes" class="flex flex-col items-center justify-center py-12 space-y-3">
-                <span class="w-8 h-8 border-3 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></span>
-                <p class="text-xs text-slate-500">Loading your patrol routes...</p>
+            <h3
+                class="pl-1 text-xs font-black uppercase tracking-wider text-slate-400"
+            >
+                Assigned Patrol Routes
+            </h3>
+
+            <div
+                v-if="isLoadingRoutes"
+                class="flex flex-col items-center justify-center space-y-3 py-12"
+            >
+                <span
+                    class="border-3 h-8 w-8 animate-spin rounded-full border-indigo-500/20 border-t-indigo-500"
+                ></span>
+                <p class="text-xs text-slate-500">
+                    Loading your patrol routes...
+                </p>
             </div>
 
-            <div v-else-if="routes.length === 0" class="bg-slate-900/40 border border-slate-800/80 rounded-3xl p-8 text-center">
-                <svg class="w-10 h-10 text-slate-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+            <div
+                v-else-if="routes.length === 0"
+                class="rounded-3xl border border-slate-800/80 bg-slate-900/40 p-8 text-center"
+            >
+                <svg
+                    class="mx-auto mb-3 h-10 w-10 text-slate-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                    />
                 </svg>
-                <p class="text-sm text-slate-400 font-medium">No assigned patrol routes found.</p>
-                <p class="text-[11px] text-slate-500 mt-1">Please verify assignments with your supervisor.</p>
+                <p class="text-sm font-medium text-slate-400">
+                    No assigned patrol routes found.
+                </p>
+                <p class="mt-1 text-[11px] text-slate-500">
+                    Please verify assignments with your supervisor.
+                </p>
             </div>
 
             <div v-else class="space-y-3">
-                <div 
-                    v-for="route in routes" 
+                <div
+                    v-for="route in routes"
                     :key="route.id"
-                    class="bg-slate-900 border border-slate-850 hover:border-slate-800/80 rounded-2xl p-4 transition-all duration-200"
+                    class="border-slate-850 rounded-2xl border bg-slate-900 p-4 transition-all duration-200 hover:border-slate-800/80"
                 >
-                    <div class="flex justify-between items-start mb-2">
-                        <h4 class="text-sm font-bold text-slate-100">{{ route.name }}</h4>
-                        <span class="text-[10px] font-mono bg-slate-950 px-2 py-0.5 rounded text-slate-400 border border-slate-800">
-                            {{ route.route_checkpoints?.length || 0 }} Checkpoints
+                    <div class="mb-2 flex items-start justify-between">
+                        <h4 class="text-sm font-bold text-slate-100">
+                            {{ route.name }}
+                        </h4>
+                        <span
+                            class="rounded border border-slate-800 bg-slate-950 px-2 py-0.5 font-mono text-[10px] text-slate-400"
+                        >
+                            {{ route.route_checkpoints?.length || 0 }}
+                            Checkpoints
                         </span>
                     </div>
-                    <p class="text-xs text-slate-400 line-clamp-2 mb-4 leading-relaxed">{{ route.description || 'No description provided.' }}</p>
-                    
+                    <p
+                        class="mb-4 line-clamp-2 text-xs leading-relaxed text-slate-400"
+                    >
+                        {{ route.description || 'No description provided.' }}
+                    </p>
+
                     <div class="flex items-center justify-between">
-                        <span class="text-[10px] text-slate-500 font-semibold flex items-center space-x-1">
-                            <svg class="w-3.5 h-3.5 mr-0.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <span
+                            class="flex items-center space-x-1 text-[10px] font-semibold text-slate-500"
+                        >
+                            <svg
+                                class="mr-0.5 h-3.5 w-3.5 text-indigo-400"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                />
                             </svg>
-                            <span>~{{ route.expected_duration_mins || 30 }} mins</span>
+                            <span
+                                >~{{
+                                    route.expected_duration_mins || 30
+                                }}
+                                mins</span
+                            >
                         </span>
-                        
-                        <button 
+
+                        <button
                             @click="emit('start-patrol', route.id)"
-                            class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] uppercase tracking-wider px-4 py-2 rounded-xl transition-all shadow-md active:scale-95"
+                            class="rounded-xl bg-indigo-600 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-white shadow-md transition-all hover:bg-indigo-500 active:scale-95"
                         >
                             Start Patrol
                         </button>
                     </div>
                 </div>
             </div>
-        </div> 
+        </div>
     </div>
 </template>
 
 <style scoped>
 @keyframes pulse-slow {
-    0%, 100% { opacity: 1; border-color: rgba(99, 102, 241, 0.3); }
-    50% { opacity: 0.95; border-color: rgba(99, 102, 241, 0.6); }
+    0%,
+    100% {
+        opacity: 1;
+        border-color: rgba(99, 102, 241, 0.3);
+    }
+    50% {
+        opacity: 0.95;
+        border-color: rgba(99, 102, 241, 0.6);
+    }
 }
 .animate-pulse-slow {
     animation: pulse-slow 3s infinite ease-in-out;

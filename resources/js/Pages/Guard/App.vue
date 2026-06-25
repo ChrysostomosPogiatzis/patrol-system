@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
-import axios from 'axios';
-import GuardLayout from '@/Layouts/GuardLayout.vue';
-import Login from '@/Pages/Guard/Login.vue';
-import Dashboard from '@/Pages/Guard/Dashboard.vue';
-import Patrol from '@/Pages/Guard/Patrol.vue';
-import Incident from '@/Pages/Guard/Incident.vue';
-import Sos from '@/Pages/Guard/Sos.vue';
-import History from '@/Pages/Guard/History.vue';
-import { useOfflineSync } from '@/Composables/useOfflineSync';
 import { useGeolocation } from '@/Composables/useGeolocation';
+import { useOfflineSync } from '@/Composables/useOfflineSync';
+import GuardLayout from '@/Layouts/GuardLayout.vue';
+import Dashboard from '@/Pages/Guard/Dashboard.vue';
+import History from '@/Pages/Guard/History.vue';
+import Incident from '@/Pages/Guard/Incident.vue';
+import Login from '@/Pages/Guard/Login.vue';
+import Patrol from '@/Pages/Guard/Patrol.vue';
+import Sos from '@/Pages/Guard/Sos.vue';
+import axios from 'axios';
+import { onMounted, ref, watch } from 'vue';
 
 // Central State
 const currentTab = ref('dashboard');
@@ -28,22 +28,32 @@ async function checkAuth() {
     if (token) {
         guardToken.value = token;
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-        
+
         try {
             const response = await axios.get('/api/guard/me');
             if (response.data && response.data.guard) {
                 guard.value = response.data.guard;
-                
+
                 // Always check the server for an active patrol first (handles device switch / refresh)
                 try {
-                    const patrolRes = await axios.get('/api/guard/patrols/active');
+                    const patrolRes = await axios.get(
+                        '/api/guard/patrols/active',
+                    );
                     if (patrolRes.data?.patrol) {
                         activePatrol.value = patrolRes.data.patrol;
                         // Sync checkpoint logs from server response
                         if (activePatrol.value.checkpoint_logs) {
-                            localStorage.setItem(`patrol_logs_${activePatrol.value.id}`, JSON.stringify(activePatrol.value.checkpoint_logs));
+                            localStorage.setItem(
+                                `patrol_logs_${activePatrol.value.id}`,
+                                JSON.stringify(
+                                    activePatrol.value.checkpoint_logs,
+                                ),
+                            );
                         }
-                        localStorage.setItem('patrol_active_session', JSON.stringify(activePatrol.value));
+                        localStorage.setItem(
+                            'patrol_active_session',
+                            JSON.stringify(activePatrol.value),
+                        );
                     } else {
                         // No active patrol on server — clear stale local cache
                         activePatrol.value = null;
@@ -51,15 +61,19 @@ async function checkAuth() {
                     }
                 } catch {
                     // Fallback to localStorage if active-patrol check fails (offline)
-                    const cachedPatrol = localStorage.getItem('patrol_active_session');
+                    const cachedPatrol = localStorage.getItem(
+                        'patrol_active_session',
+                    );
                     if (cachedPatrol) {
                         activePatrol.value = JSON.parse(cachedPatrol);
                     }
                 }
-                
+
                 // Start tracking immediately (either on active patrol, or standby)
-                startTracking(activePatrol.value ? activePatrol.value.id : null);
-                
+                startTracking(
+                    activePatrol.value ? activePatrol.value.id : null,
+                );
+
                 // Retrieve active SOS
                 const cachedSos = localStorage.getItem('patrol_active_sos');
                 if (cachedSos) {
@@ -77,19 +91,23 @@ async function checkAuth() {
                 const cachedGuard = localStorage.getItem('guard_profile');
                 if (cachedGuard) {
                     guard.value = JSON.parse(cachedGuard);
-                    
-                    const cachedPatrol = localStorage.getItem('patrol_active_session');
+
+                    const cachedPatrol = localStorage.getItem(
+                        'patrol_active_session',
+                    );
                     if (cachedPatrol) {
                         activePatrol.value = JSON.parse(cachedPatrol);
                     }
-                    
+
                     const cachedSos = localStorage.getItem('patrol_active_sos');
                     if (cachedSos) {
                         activeSos.value = JSON.parse(cachedSos);
                     }
-                    
+
                     // Start tracking immediately in offline mode
-                    startTracking(activePatrol.value ? activePatrol.value.id : null);
+                    startTracking(
+                        activePatrol.value ? activePatrol.value.id : null,
+                    );
                 } else {
                     handleLogout();
                 }
@@ -109,10 +127,10 @@ function handleLoginSuccess(data: { token: string; guard: any }) {
     guardToken.value = data.token;
     guard.value = data.guard;
     axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`;
-    
+
     // Start tracking immediately
     startTracking(null);
-    
+
     // Check if there are queued items from before, trigger sync
     triggerSync();
 }
@@ -134,22 +152,27 @@ function handleLogout() {
 // Start Patrol session
 async function handleStartPatrol(routeId: number) {
     if (!isOnline.value) {
-        alert('You must have active internet coverage to initialize a new patrol shift.');
+        alert(
+            'You must have active internet coverage to initialize a new patrol shift.',
+        );
         return;
     }
 
     try {
         const response = await axios.post('/api/guard/patrols/start', {
-            route_id: routeId
+            route_id: routeId,
         });
 
         if (response.data && response.data.patrol) {
             activePatrol.value = response.data.patrol;
-            localStorage.setItem('patrol_active_session', JSON.stringify(activePatrol.value));
-            
+            localStorage.setItem(
+                'patrol_active_session',
+                JSON.stringify(activePatrol.value),
+            );
+
             // Start periodic background location updates
             startTracking(activePatrol.value.id);
-            
+
             // Redirect to active checklist
             currentTab.value = 'patrol';
         }
@@ -163,17 +186,28 @@ async function handleStartPatrol(routeId: number) {
                 if (resumeRes.data?.patrol) {
                     activePatrol.value = resumeRes.data.patrol;
                     if (activePatrol.value.checkpoint_logs) {
-                        localStorage.setItem(`patrol_logs_${activePatrol.value.id}`, JSON.stringify(activePatrol.value.checkpoint_logs));
+                        localStorage.setItem(
+                            `patrol_logs_${activePatrol.value.id}`,
+                            JSON.stringify(activePatrol.value.checkpoint_logs),
+                        );
                     }
-                    localStorage.setItem('patrol_active_session', JSON.stringify(activePatrol.value));
+                    localStorage.setItem(
+                        'patrol_active_session',
+                        JSON.stringify(activePatrol.value),
+                    );
                     startTracking(activePatrol.value.id);
                     currentTab.value = 'patrol';
                     return;
                 }
-            } catch { /* fallback below */ }
+            } catch {
+                /* fallback below */
+            }
             // Fallback: use what the server returned in the 422
             activePatrol.value = existingPatrol;
-            localStorage.setItem('patrol_active_session', JSON.stringify(existingPatrol));
+            localStorage.setItem(
+                'patrol_active_session',
+                JSON.stringify(existingPatrol),
+            );
             startTracking(existingPatrol.id);
             currentTab.value = 'patrol';
         } else {
@@ -189,7 +223,7 @@ function handlePatrolCompleted() {
     // Keep tracking active but remove the patrol association
     startTracking(null);
     currentTab.value = 'dashboard';
-    
+
     // Trigger sync to dispatch final logs
     triggerSync();
 }
@@ -204,29 +238,32 @@ function handleSosTriggered(sosData: any) {
 // Trigger SOS directly from Dashboard button
 async function handleTriggerSosDirectly() {
     currentTab.value = 'sos';
-    
+
     // Get immediate location coords
-    let lat = 34.671200;
-    let lon = 33.041200;
-    
+    let lat = 34.6712;
+    let lon = 33.0412;
+
     try {
         const response = await axios.post('/api/guard/sos/trigger', {
             latitude: lat,
             longitude: lon,
-            note: 'Panic button pressed from Dashboard'
+            note: 'Panic button pressed from Dashboard',
         });
 
         if (response.data && response.data.sos_alert) {
             handleSosTriggered(response.data.sos_alert);
         }
     } catch (e: any) {
-        console.error('Failed to trigger SOS online, activating local mock:', e);
+        console.error(
+            'Failed to trigger SOS online, activating local mock:',
+            e,
+        );
         const mockSos = {
             id: Date.now(),
             triggered_latitude: lat,
             triggered_longitude: lon,
             note: 'Panic button pressed from Dashboard (Offline)',
-            triggered_at: new Date().toISOString()
+            triggered_at: new Date().toISOString(),
         };
         handleSosTriggered(mockSos);
     }
@@ -239,30 +276,40 @@ function handleSosResolved() {
     currentTab.value = 'dashboard';
 }
 
-
 // Auto-Sync pending closures once online
 watch(isOnline, async (nextOnline) => {
     if (nextOnline) {
         await triggerSync();
-        
+
         // Check if there was an offline completion pending
-        const pendingCompletion = localStorage.getItem('patrol_offline_completion_pending');
+        const pendingCompletion = localStorage.getItem(
+            'patrol_offline_completion_pending',
+        );
         if (pendingCompletion) {
             try {
                 const details = JSON.parse(pendingCompletion);
-                
+
                 const formData = new FormData();
                 if (details.general_note) {
                     formData.append('general_note', details.general_note);
                 }
                 if (details.completion_latitude) {
-                    formData.append('completion_latitude', details.completion_latitude.toString());
+                    formData.append(
+                        'completion_latitude',
+                        details.completion_latitude.toString(),
+                    );
                 }
                 if (details.completion_longitude) {
-                    formData.append('completion_longitude', details.completion_longitude.toString());
+                    formData.append(
+                        'completion_longitude',
+                        details.completion_longitude.toString(),
+                    );
                 }
-                
-                if (details.signature_base64 && details.signature_base64.length > 1500) {
+
+                if (
+                    details.signature_base64 &&
+                    details.signature_base64.length > 1500
+                ) {
                     const arr = details.signature_base64.split(',');
                     const mime = arr[0].match(/:(.*?);/)![1];
                     const bstr = atob(arr[1]);
@@ -271,14 +318,22 @@ watch(isOnline, async (nextOnline) => {
                     while (n--) {
                         u8arr[n] = bstr.charCodeAt(n);
                     }
-                    const sigFile = new File([u8arr], 'completion_signature.png', { type: mime });
+                    const sigFile = new File(
+                        [u8arr],
+                        'completion_signature.png',
+                        { type: mime },
+                    );
                     formData.append('completion_signature', sigFile);
                 }
 
-                await axios.post(`/api/guard/patrols/${details.patrol_id}/complete`, formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-                
+                await axios.post(
+                    `/api/guard/patrols/${details.patrol_id}/complete`,
+                    formData,
+                    {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                    },
+                );
+
                 localStorage.removeItem('patrol_offline_completion_pending');
                 console.log('Pending offline patrol completion synced.');
             } catch (e) {
@@ -294,15 +349,36 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="bg-slate-950 min-h-screen text-slate-100 flex flex-col items-center justify-center">
+    <div
+        class="flex min-h-screen flex-col items-center justify-center bg-slate-950 text-slate-100"
+    >
         <!-- Main Application Loading Shell -->
-        <div v-if="isLoading" class="flex flex-col items-center justify-center space-y-4">
-            <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center shadow-2xl animate-spin">
-                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+        <div
+            v-if="isLoading"
+            class="flex flex-col items-center justify-center space-y-4"
+        >
+            <div
+                class="flex h-12 w-12 animate-spin items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-500 to-violet-600 shadow-2xl"
+            >
+                <svg
+                    class="h-6 w-6 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                    />
                 </svg>
             </div>
-            <p class="text-xs text-slate-500 uppercase tracking-widest font-mono">Loading Security Client...</p>
+            <p
+                class="font-mono text-xs uppercase tracking-widest text-slate-500"
+            >
+                Loading Security Client...
+            </p>
         </div>
 
         <!-- LOGIN PANEL (UNAUTHENTICATED) -->
@@ -311,55 +387,58 @@ onMounted(() => {
         </div>
 
         <!-- MOBILE APPLICATION PORT (AUTHENTICATED DOCK) -->
-        <div v-else class="w-full max-w-lg min-h-screen flex flex-col bg-slate-950 border-x border-slate-900 shadow-2xl">
-            <GuardLayout 
-                :currentTab="currentTab" 
+        <div
+            v-else
+            class="flex min-h-screen w-full max-w-lg flex-col border-x border-slate-900 bg-slate-950 shadow-2xl"
+        >
+            <GuardLayout
+                :currentTab="currentTab"
                 :guardName="guard?.full_name"
-                @navigate="(tab) => currentTab = tab"
+                @navigate="(tab) => (currentTab = tab)"
                 @logout="handleLogout"
             >
                 <!-- Dashboard View -->
-                <Dashboard 
-                    v-if="currentTab === 'dashboard'" 
+                <Dashboard
+                    v-if="currentTab === 'dashboard'"
                     :guard="guard"
                     :activePatrol="activePatrol"
                     @start-patrol="handleStartPatrol"
                     @trigger-sos="handleTriggerSosDirectly"
-                    @navigate="(tab) => currentTab = tab"
+                    @navigate="(tab) => (currentTab = tab)"
                 />
 
                 <!-- Active Patrol Checklist View -->
-                <Patrol 
-                    v-else-if="currentTab === 'patrol'" 
+                <Patrol
+                    v-else-if="currentTab === 'patrol'"
                     :guard="guard"
                     :activePatrol="activePatrol"
                     @patrol-completed="handlePatrolCompleted"
-                    @navigate="(tab) => currentTab = tab"
+                    @navigate="(tab) => (currentTab = tab)"
+                    @checkpoint-scanned="activePatrol.completed_checkpoints++"
+                    @checkpoint-skipped="activePatrol.skipped_checkpoints++"
                 />
 
                 <!-- Incident Logging View -->
-                <Incident 
-                    v-else-if="currentTab === 'incident'" 
+                <Incident
+                    v-else-if="currentTab === 'incident'"
                     :guard="guard"
                     :activePatrol="activePatrol"
-                    @navigate="(tab) => currentTab = tab"
+                    @navigate="(tab) => (currentTab = tab)"
+                    @incident-reported="activePatrol.incident_count++"
                 />
 
                 <!-- SOS Emergency View -->
-                <Sos 
-                    v-else-if="currentTab === 'sos'" 
+                <Sos
+                    v-else-if="currentTab === 'sos'"
                     :guard="guard"
                     :activeSos="activeSos"
                     @sos-triggered="handleSosTriggered"
                     @sos-resolved="handleSosResolved"
-                    @navigate="(tab) => currentTab = tab"
+                    @navigate="(tab) => (currentTab = tab)"
                 />
 
                 <!-- Patrol History View -->
-                <History
-                    v-else-if="currentTab === 'history'"
-                    :guard="guard"
-                />
+                <History v-else-if="currentTab === 'history'" :guard="guard" />
             </GuardLayout>
         </div>
     </div>
@@ -367,7 +446,8 @@ onMounted(() => {
 
 <style>
 /* Global Touch improvements and mobile transitions */
-html, body {
+html,
+body {
     background-color: #020617; /* bg-slate-950 */
     overflow-x: hidden;
 }

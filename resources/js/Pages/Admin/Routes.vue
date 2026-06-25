@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import { Head, usePage } from '@inertiajs/vue3';
-import { ref, onMounted, computed } from 'vue';
 import axios from 'axios';
+import { computed, onMounted, ref } from 'vue';
 
 // Component Import
 import RouteModal from '@/Components/Admin/RouteModal.vue';
@@ -46,7 +46,10 @@ const editingRoute = ref<Route | null>(null);
 const page = usePage();
 const isAllCompaniesMode = computed(() => {
     const user = page.props.auth.user as any;
-    return user.role === 'superadmin' && !(page.props.auth as any).override_tenant_id;
+    return (
+        user.role === 'superadmin' &&
+        !(page.props.auth as any).override_tenant_id
+    );
 });
 
 const searchQuery = ref('');
@@ -86,51 +89,53 @@ async function deleteRoute(id: number) {
 async function submitAddRoute(payload: any) {
     try {
         if (editingRoute.value) {
-            await axios.put(`/admin/api/routes/${editingRoute.value.id}`, payload);
+            await axios.put(
+                `/admin/api/routes/${editingRoute.value.id}`,
+                payload,
+            );
         } else {
             await axios.post('/admin/api/routes', payload);
         }
         showAddRouteModal.value = false;
         fetchData();
-    } catch (e) { 
-        alert('Failed to save route.'); 
+    } catch (e) {
+        alert('Failed to save route.');
     }
 }
 
 const filteredAndSortedRoutes = computed(() => {
     let list = routes.value;
-    
+
     // Filtering
     if (searchQuery.value) {
         const q = searchQuery.value.toLowerCase();
-        list = list.filter(r => 
-            r.name.toLowerCase().includes(q) || 
-            (r.description && r.description.toLowerCase().includes(q))
+        list = list.filter(
+            (r) =>
+                r.name.toLowerCase().includes(q) ||
+                (r.description && r.description.toLowerCase().includes(q)),
         );
     }
-    
+
     // Sorting
     list = [...list].sort((a, b) => {
         let valA: any = '';
         let valB: any = '';
-        
+
         if (sortBy.value === 'name') {
             valA = a.name;
             valB = b.name;
-            return sortOrder.value === 'asc' 
-                ? valA.localeCompare(valB) 
+            return sortOrder.value === 'asc'
+                ? valA.localeCompare(valB)
                 : valB.localeCompare(valA);
         } else if (sortBy.value === 'duration') {
             valA = a.expected_duration_mins || 0;
             valB = b.expected_duration_mins || 0;
-            return sortOrder.value === 'asc' 
-                ? valA - valB 
-                : valB - valA;
+            return sortOrder.value === 'asc' ? valA - valB : valB - valA;
         }
-        
+
         return 0;
     });
-    
+
     return list;
 });
 
@@ -154,126 +159,224 @@ onMounted(() => {
     <AdminLayout title="Patrol Routes Sequence">
         <div class="space-y-4">
             <!-- Context warning banner -->
-            <div v-if="isAllCompaniesMode" class="bg-indigo-50 border border-indigo-150 p-4 rounded-2xl flex items-center gap-3 text-xs text-indigo-750 font-medium">
+            <div
+                v-if="isAllCompaniesMode"
+                class="border-indigo-150 text-indigo-750 flex items-center gap-3 rounded-2xl border bg-indigo-50 p-4 text-xs font-medium"
+            >
                 <span class="text-base">ℹ️</span>
-                <span>You are viewing routes across <strong>all companies</strong>. To create new patrol routes or customize sequential checkpoints validation, please select a specific company context from the dropdown at the top.</span>
+                <span
+                    >You are viewing routes across
+                    <strong>all companies</strong>. To create new patrol routes
+                    or customize sequential checkpoints validation, please
+                    select a specific company context from the dropdown at the
+                    top.</span
+                >
             </div>
 
             <!-- Action bar -->
-            <div class="flex justify-between items-center">
-                <span class="text-xs text-slate-500 font-black uppercase tracking-widest font-mono">Routing Configurations ({{ filteredAndSortedRoutes.length }})</span>
-                <button 
+            <div class="flex items-center justify-between">
+                <span
+                    class="font-mono text-xs font-black uppercase tracking-widest text-slate-500"
+                    >Routing Configurations ({{
+                        filteredAndSortedRoutes.length
+                    }})</span
+                >
+                <button
                     @click="openAddRoute"
                     :disabled="isAllCompaniesMode"
-                    class="text-white font-black text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md flex items-center space-x-2 min-h-[48px]"
-                    :class="isAllCompaniesMode ? 'bg-slate-350 cursor-not-allowed opacity-60' : 'bg-indigo-600 hover:bg-indigo-500 active:scale-95'"
-                    :title="isAllCompaniesMode ? 'Select a company context to create routes' : ''"
+                    class="flex min-h-[48px] items-center space-x-2 rounded-xl px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-md transition-all"
+                    :class="
+                        isAllCompaniesMode
+                            ? 'bg-slate-350 cursor-not-allowed opacity-60'
+                            : 'bg-indigo-600 hover:bg-indigo-500 active:scale-95'
+                    "
+                    :title="
+                        isAllCompaniesMode
+                            ? 'Select a company context to create routes'
+                            : ''
+                    "
                 >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    <svg
+                        class="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2.2"
+                            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                        />
                     </svg>
                     <span>Create Patrol Route</span>
                 </button>
             </div>
 
             <!-- Search and filters -->
-            <div class="bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-col md:flex-row gap-4 shadow-sm">
-                <div class="flex-1 relative">
-                    <input 
-                        v-model="searchQuery" 
-                        type="text" 
-                        placeholder="Search routes by name or description..." 
-                        class="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 min-h-[42px]"
+            <div
+                class="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm md:flex-row"
+            >
+                <div class="relative flex-1">
+                    <input
+                        v-model="searchQuery"
+                        type="text"
+                        placeholder="Search routes by name or description..."
+                        class="min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-xs focus:border-indigo-500 focus:outline-none"
                     />
-                    <span class="absolute left-3.5 top-3 text-slate-400 text-xs">🔍</span>
+                    <span class="absolute left-3.5 top-3 text-xs text-slate-400"
+                        >🔍</span
+                    >
                 </div>
-                <div class="flex items-center space-x-2 text-xs font-mono uppercase text-slate-500">
+                <div
+                    class="flex items-center space-x-2 font-mono text-xs uppercase text-slate-500"
+                >
                     <span class="mr-1">Sort by:</span>
-                    <button 
+                    <button
                         @click="toggleSort('name')"
-                        class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 cursor-pointer min-h-[42px]"
-                        :class="sortBy === 'name' ? 'bg-indigo-50 text-indigo-600 font-bold border-indigo-250' : ''"
+                        class="min-h-[42px] cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs focus:border-indigo-500 focus:outline-none"
+                        :class="
+                            sortBy === 'name'
+                                ? 'border-indigo-250 bg-indigo-50 font-bold text-indigo-600'
+                                : ''
+                        "
                     >
-                        Name <span v-if="sortBy === 'name'">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
+                        Name
+                        <span v-if="sortBy === 'name'">{{
+                            sortOrder === 'asc' ? '▲' : '▼'
+                        }}</span>
                     </button>
-                    <button 
+                    <button
                         @click="toggleSort('duration')"
-                        class="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500 cursor-pointer min-h-[42px]"
-                        :class="sortBy === 'duration' ? 'bg-indigo-50 text-indigo-600 font-bold border-indigo-250' : ''"
+                        class="min-h-[42px] cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs focus:border-indigo-500 focus:outline-none"
+                        :class="
+                            sortBy === 'duration'
+                                ? 'border-indigo-250 bg-indigo-50 font-bold text-indigo-600'
+                                : ''
+                        "
                     >
-                        Duration <span v-if="sortBy === 'duration'">{{ sortOrder === 'asc' ? '▲' : '▼' }}</span>
+                        Duration
+                        <span v-if="sortBy === 'duration'">{{
+                            sortOrder === 'asc' ? '▲' : '▼'
+                        }}</span>
                     </button>
                 </div>
             </div>
 
             <!-- Routes Cards Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div 
-                    v-for="route in filteredAndSortedRoutes" 
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div
+                    v-for="route in filteredAndSortedRoutes"
                     :key="route.id"
-                    class="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm hover:border-slate-350 transition-all duration-200 group"
+                    class="hover:border-slate-350 group space-y-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-all duration-200"
                 >
-                    <div class="flex justify-between items-start">
+                    <div class="flex items-start justify-between">
                         <div>
-                            <h4 class="text-sm font-black text-slate-800 font-mono group-hover:text-indigo-600 transition-colors flex items-center gap-2 flex-wrap">
+                            <h4
+                                class="flex flex-wrap items-center gap-2 font-mono text-sm font-black text-slate-800 transition-colors group-hover:text-indigo-600"
+                            >
                                 <span>{{ route.name }}</span>
-                                <span v-if="isAllCompaniesMode" class="text-[9px] font-bold text-slate-450 uppercase bg-slate-105 border border-slate-200 px-1.5 py-0.5 rounded font-sans normal-case">{{ route.tenant?.name || 'System' }}</span>
+                                <span
+                                    v-if="isAllCompaniesMode"
+                                    class="text-slate-450 bg-slate-105 rounded border border-slate-200 px-1.5 py-0.5 font-sans text-[9px] font-bold uppercase normal-case"
+                                    >{{ route.tenant?.name || 'System' }}</span
+                                >
                             </h4>
-                            <p class="text-[11px] text-slate-505 mt-1.5 leading-relaxed">{{ route.description || 'No description provided' }}</p>
+                            <p
+                                class="text-slate-505 mt-1.5 text-[11px] leading-relaxed"
+                            >
+                                {{
+                                    route.description ||
+                                    'No description provided'
+                                }}
+                            </p>
                         </div>
-                        <div class="text-right text-[9px] font-mono space-y-1.5 min-w-[90px]">
-                            <span class="block bg-slate-50 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-150 font-bold uppercase">
+                        <div
+                            class="min-w-[90px] space-y-1.5 text-right font-mono text-[9px]"
+                        >
+                            <span
+                                class="border-slate-150 block rounded-lg border bg-slate-50 px-2.5 py-1 font-bold uppercase text-slate-600"
+                            >
                                 {{ route.expected_duration_mins || 30 }} mins
                             </span>
-                            <span class="block font-black uppercase text-indigo-600">
-                                {{ route.enforce_order ? 'Strict Seq' : 'Flexible' }}
+                            <span
+                                class="block font-black uppercase text-indigo-600"
+                            >
+                                {{
+                                    route.enforce_order
+                                        ? 'Strict Seq'
+                                        : 'Flexible'
+                                }}
                             </span>
                         </div>
                     </div>
 
-                    <div class="space-y-3 pt-3 border-t border-slate-150">
-                        <h5 class="text-[9px] font-black text-slate-400 uppercase tracking-widest font-mono">Ordered Checkpoints Sequence</h5>
-                        <div class="space-y-2 pl-2 border-l-2 border-indigo-500/25">
-                            <div 
-                                v-for="rc in route.route_checkpoints" 
+                    <div class="border-slate-150 space-y-3 border-t pt-3">
+                        <h5
+                            class="font-mono text-[9px] font-black uppercase tracking-widest text-slate-400"
+                        >
+                            Ordered Checkpoints Sequence
+                        </h5>
+                        <div
+                            class="space-y-2 border-l-2 border-indigo-500/25 pl-2"
+                        >
+                            <div
+                                v-for="rc in route.route_checkpoints"
                                 :key="rc.id"
-                                class="text-xs text-slate-600 flex items-center space-x-2.5"
+                                class="flex items-center space-x-2.5 text-xs text-slate-600"
                             >
-                                <span class="w-5 h-5 rounded-lg bg-slate-50 text-[9px] font-mono text-indigo-600 flex items-center justify-center border border-slate-150 font-black">
+                                <span
+                                    class="border-slate-150 flex h-5 w-5 items-center justify-center rounded-lg border bg-slate-50 font-mono text-[9px] font-black text-indigo-600"
+                                >
                                     {{ rc.position }}
                                 </span>
                                 <span class="font-medium text-slate-700">
-                                    {{ rc.checkpoint?.name }} 
-                                    <small class="text-slate-455 font-mono">({{ rc.checkpoint?.location?.name }})</small>
+                                    {{ rc.checkpoint?.name }}
+                                    <small class="text-slate-455 font-mono"
+                                        >({{
+                                            rc.checkpoint?.location?.name
+                                        }})</small
+                                    >
                                 </span>
                             </div>
                         </div>
                     </div>
 
                     <!-- Actions footer for routes -->
-                    <div class="flex justify-end space-x-2.5 pt-3 border-t border-slate-150/60">
-                        <button 
+                    <div
+                        class="border-slate-150/60 flex justify-end space-x-2.5 border-t pt-3"
+                    >
+                        <button
                             @click="openEditRoute(route)"
-                            class="bg-indigo-50 hover:bg-indigo-100 text-indigo-650 px-3.5 py-1.5 rounded-lg text-[10px] font-black uppercase font-mono tracking-wider border border-indigo-100/60 active:scale-95 transition-all"
+                            class="text-indigo-650 rounded-lg border border-indigo-100/60 bg-indigo-50 px-3.5 py-1.5 font-mono text-[10px] font-black uppercase tracking-wider transition-all hover:bg-indigo-100 active:scale-95"
                         >
                             Edit Route
                         </button>
-                        <button 
+                        <button
                             @click="deleteRoute(route.id)"
-                            class="bg-red-50 hover:bg-red-100 text-red-650 px-3.5 py-1.5 rounded-lg text-[10px] font-black uppercase font-mono tracking-wider border border-red-100/60 active:scale-95 transition-all"
+                            class="text-red-650 rounded-lg border border-red-100/60 bg-red-50 px-3.5 py-1.5 font-mono text-[10px] font-black uppercase tracking-wider transition-all hover:bg-red-100 active:scale-95"
                         >
                             Delete
                         </button>
                     </div>
                 </div>
 
-                <div v-if="filteredAndSortedRoutes.length === 0" class="col-span-2 p-16 text-center text-slate-400 bg-white border border-dashed border-slate-200 rounded-2xl text-xs font-medium">
+                <div
+                    v-if="filteredAndSortedRoutes.length === 0"
+                    class="col-span-2 rounded-2xl border border-dashed border-slate-200 bg-white p-16 text-center text-xs font-medium text-slate-400"
+                >
                     No patrol routes match the query.
                 </div>
             </div>
         </div>
 
         <!-- FORM MODAL -->
-        <RouteModal :show="showAddRouteModal" :checkpoints="checkpoints" :editRoute="editingRoute" @close="showAddRouteModal = false" @submit="submitAddRoute" />
+        <RouteModal
+            :show="showAddRouteModal"
+            :checkpoints="checkpoints"
+            :editRoute="editingRoute"
+            @close="showAddRouteModal = false"
+            @submit="submitAddRoute"
+        />
     </AdminLayout>
 </template>

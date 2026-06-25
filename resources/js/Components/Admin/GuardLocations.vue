@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-
 interface Tenant {
     id: number;
     name: string;
@@ -31,7 +29,10 @@ const props = defineProps<{
 function formatTime(timeStr: string) {
     if (!timeStr) return '';
     try {
-        return new Date(timeStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return new Date(timeStr).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+        });
     } catch (e) {
         return timeStr;
     }
@@ -46,45 +47,84 @@ function getBatteryColor(pct?: number) {
 </script>
 
 <template>
-    <div class="bg-white border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm">
-        <div class="flex justify-between items-center pb-2 border-b border-slate-100">
-            <h3 class="text-xs font-black uppercase tracking-widest text-slate-500">
+    <div
+        class="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm"
+    >
+        <div
+            class="flex items-center justify-between border-b border-slate-100 pb-2"
+        >
+            <h3
+                class="text-xs font-black uppercase tracking-widest text-slate-500"
+            >
                 🚨 Live Guard Location Feed
             </h3>
-            <span class="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-indigo-50 text-indigo-600">
+            <span
+                class="rounded-full bg-indigo-50 px-2 py-0.5 font-mono text-[9px] font-bold text-indigo-600"
+            >
                 ACTIVE
             </span>
         </div>
 
-        <div v-if="locations.length === 0" class="py-12 text-center border-2 border-dashed border-slate-150 rounded-2xl">
-            <div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center mx-auto mb-2.5">
-                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+        <div
+            v-if="locations.length === 0"
+            class="border-slate-150 rounded-2xl border-2 border-dashed py-12 text-center"
+        >
+            <div
+                class="mx-auto mb-2.5 flex h-10 w-10 items-center justify-center rounded-full bg-slate-50"
+            >
+                <svg
+                    class="h-5 w-5 text-slate-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.5"
+                        d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                    />
                 </svg>
             </div>
-            <p class="text-xs text-slate-450 font-medium">No live guard tracking data available.</p>
+            <p class="text-slate-450 text-xs font-medium">
+                No live guard tracking data available.
+            </p>
         </div>
 
-        <div v-else class="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-            <div 
-                v-for="loc in locations" 
+        <div v-else class="max-h-[420px] space-y-3 overflow-y-auto pr-1">
+            <div
+                v-for="loc in locations"
                 :key="loc.id"
-                class="bg-slate-50 border border-slate-150 rounded-xl p-4 space-y-3 hover:border-indigo-500/30 transition-all duration-200 group"
+                class="border-slate-150 group space-y-3 rounded-xl border bg-slate-50 p-4 transition-all duration-200 hover:border-indigo-500/30"
             >
-                <div class="flex justify-between items-start">
+                <div class="flex items-start justify-between">
                     <div>
                         <div class="flex items-center space-x-2">
-                            <span 
-                                class="w-2 h-2 rounded-full"
-                                :class="loc.is_online ? 'bg-emerald-500 shadow-sm shadow-emerald-550/50' : 'bg-slate-400'"
+                            <span
+                                class="h-2 w-2 rounded-full"
+                                :class="
+                                    loc.is_online
+                                        ? 'shadow-emerald-550/50 bg-emerald-500 shadow-sm'
+                                        : 'bg-slate-400'
+                                "
                             ></span>
-                            <h4 class="text-xs font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                                {{ loc.security_guard?.full_name || 'Unknown Guard' }}
+                            <h4
+                                class="text-xs font-bold text-slate-800 transition-colors group-hover:text-indigo-600"
+                            >
+                                {{
+                                    loc.security_guard?.full_name ||
+                                    'Unknown Guard'
+                                }}
                             </h4>
                         </div>
-                        <span class="text-[9px] text-slate-450 font-mono mt-1 block">
-                            ID: {{ loc.security_guard?.employee_id || 'N/A' }} 
-                            <span v-if="loc.tenant" class="ml-1 bg-purple-550/10 text-purple-650 border border-purple-200 px-1 rounded uppercase font-black tracking-wider text-[8px]">
+                        <span
+                            class="text-slate-450 mt-1 block font-mono text-[9px]"
+                        >
+                            ID: {{ loc.security_guard?.employee_id || 'N/A' }}
+                            <span
+                                v-if="loc.tenant"
+                                class="bg-purple-550/10 text-purple-650 ml-1 rounded border border-purple-200 px-1 text-[8px] font-black uppercase tracking-wider"
+                            >
                                 {{ loc.tenant.name }}
                             </span>
                         </span>
@@ -92,31 +132,48 @@ function getBatteryColor(pct?: number) {
 
                     <div class="flex items-center space-x-2">
                         <!-- Battery Indicator -->
-                        <span 
-                            v-if="loc.battery_pct !== undefined" 
-                            class="text-[9px] font-mono font-bold flex items-center space-x-1"
+                        <span
+                            v-if="loc.battery_pct !== undefined"
+                            class="flex items-center space-x-1 font-mono text-[9px] font-bold"
                             :class="getBatteryColor(loc.battery_pct)"
                         >
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            <svg
+                                class="h-3.5 w-3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    stroke-width="2"
+                                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                                />
                             </svg>
                             <span>{{ loc.battery_pct }}%</span>
                         </span>
-                        
-                        <span 
-                            class="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded border"
-                            :class="loc.is_online ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200'"
+
+                        <span
+                            class="rounded border px-1.5 py-0.5 font-mono text-[8px] font-bold"
+                            :class="
+                                loc.is_online
+                                    ? 'border-emerald-100 bg-emerald-50 text-emerald-600'
+                                    : 'border-slate-200 bg-slate-50 text-slate-500'
+                            "
                         >
                             {{ loc.is_online ? 'ONLINE' : 'OFFLINE' }}
                         </span>
                     </div>
                 </div>
 
-                <div class="flex justify-between items-center text-[10px] text-slate-500 pt-1 border-t border-slate-150">
-                    <span class="font-mono text-slate-450">
-                        GPS: {{ Number(loc.latitude).toFixed(5) }}, {{ Number(loc.longitude).toFixed(5) }}
+                <div
+                    class="border-slate-150 flex items-center justify-between border-t pt-1 text-[10px] text-slate-500"
+                >
+                    <span class="text-slate-450 font-mono">
+                        GPS: {{ Number(loc.latitude).toFixed(5) }},
+                        {{ Number(loc.longitude).toFixed(5) }}
                     </span>
-                    <span class="text-[9px] text-slate-400 font-mono">
+                    <span class="font-mono text-[9px] text-slate-400">
                         Ping: {{ formatTime(loc.pinged_at) }}
                     </span>
                 </div>

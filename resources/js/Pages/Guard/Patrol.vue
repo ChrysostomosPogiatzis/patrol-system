@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
-import axios from 'axios';
-import { useOfflineSync } from '@/Composables/useOfflineSync';
 import { useGeolocation } from '@/Composables/useGeolocation';
+import { useOfflineSync } from '@/Composables/useOfflineSync';
 import { CapacitorBridge } from '@/Services/CapacitorBridge';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import axios from 'axios';
+import { onMounted, ref, watch } from 'vue';
 
 interface Checkpoint {
     id: number;
@@ -46,6 +46,8 @@ const props = defineProps<{
 const emit = defineEmits<{
     (e: 'patrol-completed'): void;
     (e: 'navigate', tab: string): void;
+    (e: 'checkpoint-scanned'): void;
+    (e: 'checkpoint-skipped'): void;
 }>();
 
 const { isOnline, addToQueue } = useOfflineSync();
@@ -98,19 +100,19 @@ function initSignature(canvas: HTMLCanvasElement | null) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
+
     // Clear & styling
     ctx.strokeStyle = '#818cf8'; // Indigo 400
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
-    
+
     const getPos = (e: MouseEvent | TouchEvent) => {
         const rect = canvas.getBoundingClientRect();
         const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
         const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
         return {
             x: clientX - rect.left,
-            y: clientY - rect.top
+            y: clientY - rect.top,
         };
     };
 
@@ -148,9 +150,9 @@ function isCanvasBlank(canvas: HTMLCanvasElement): boolean {
     const context = canvas.getContext('2d');
     if (!context) return true;
     const buffer = new Uint32Array(
-        context.getImageData(0, 0, canvas.width, canvas.height).data.buffer
+        context.getImageData(0, 0, canvas.width, canvas.height).data.buffer,
     );
-    return !buffer.some(color => color !== 0);
+    return !buffer.some((color) => color !== 0);
 }
 
 function clearSignature(canvas: HTMLCanvasElement | null) {
@@ -164,13 +166,15 @@ function clearSignature(canvas: HTMLCanvasElement | null) {
 // Load logs of active patrol (fetching from server if online, otherwise cache)
 async function loadPatrolLogs() {
     if (!props.activePatrol) return;
-    
+
     logsLoading.value = true;
     logsError.value = null;
-    
+
     // If offline, read only cache
     if (!isOnline.value) {
-        const cachedLogs = localStorage.getItem(`patrol_logs_${props.activePatrol.id}`);
+        const cachedLogs = localStorage.getItem(
+            `patrol_logs_${props.activePatrol.id}`,
+        );
         if (cachedLogs) {
             logs.value = JSON.parse(cachedLogs);
         } else if (props.activePatrol.checkpoint_logs) {
@@ -183,7 +187,10 @@ async function loadPatrolLogs() {
     }
 
     try {
-        const response = await axios.get(`/api/guard/patrols/${props.activePatrol.id}`, { timeout: 5000 });
+        const response = await axios.get(
+            `/api/guard/patrols/${props.activePatrol.id}`,
+            { timeout: 5000 },
+        );
         if (response.data && response.data.patrol) {
             if (response.data.patrol.checkpoint_logs) {
                 logs.value = response.data.patrol.checkpoint_logs;
@@ -201,7 +208,9 @@ async function loadPatrolLogs() {
     } catch (e: any) {
         console.error('Failed to fetch logs from server:', e);
         // Fallback to cache
-        const cachedLogs = localStorage.getItem(`patrol_logs_${props.activePatrol.id}`);
+        const cachedLogs = localStorage.getItem(
+            `patrol_logs_${props.activePatrol.id}`,
+        );
         if (cachedLogs) {
             logs.value = JSON.parse(cachedLogs);
         } else {
@@ -215,20 +224,27 @@ async function loadPatrolLogs() {
 
 function saveLogsCache() {
     if (!props.activePatrol) return;
-    localStorage.setItem(`patrol_logs_${props.activePatrol.id}`, JSON.stringify(logs.value));
+    localStorage.setItem(
+        `patrol_logs_${props.activePatrol.id}`,
+        JSON.stringify(logs.value),
+    );
 }
 
 // Watch active patrol session changes
-watch(() => props.activePatrol, (newVal) => {
-    if (newVal) {
-        routeDetails.value = newVal.route || null;
-        loadPatrolLogs();
-        checkPatrolCompletion();
-    } else {
-        logs.value = [];
-        routeDetails.value = null;
-    }
-}, { immediate: true, deep: true });
+watch(
+    () => props.activePatrol,
+    (newVal) => {
+        if (newVal) {
+            routeDetails.value = newVal.route || null;
+            loadPatrolLogs();
+            checkPatrolCompletion();
+        } else {
+            logs.value = [];
+            routeDetails.value = null;
+        }
+    },
+    { immediate: true, deep: true },
+);
 
 // Check if all checkpoints are done
 function checkPatrolCompletion() {
@@ -236,9 +252,11 @@ function checkPatrolCompletion() {
         showCompletePanel.value = false;
         return;
     }
-    const pending = logs.value.filter(l => l.status === 'pending' || l.status === 'out_of_order_attempt');
+    const pending = logs.value.filter(
+        (l) => l.status === 'pending' || l.status === 'out_of_order_attempt',
+    );
     showCompletePanel.value = pending.length === 0;
-    
+
     if (showCompletePanel.value) {
         setTimeout(() => {
             initSignature(completionSigCanvasRef.value);
@@ -252,14 +270,20 @@ function isCheckpointLocked(log: CheckpointLog): boolean {
         return false;
     }
     // Find the first pending position
-    const firstPending = logs.value.find(l => l.status === 'pending' || l.status === 'out_of_order_attempt');
+    const firstPending = logs.value.find(
+        (l) => l.status === 'pending' || l.status === 'out_of_order_attempt',
+    );
     if (!firstPending) return false;
     return log.position > firstPending.position;
 }
 
 // Find current interactive pending checkpoint (fixed operator precedence bug)
 const getActiveLog = () => {
-    return logs.value.find(l => (l.status === 'pending' || l.status === 'out_of_order_attempt') && !isCheckpointLocked(l));
+    return logs.value.find(
+        (l) =>
+            (l.status === 'pending' || l.status === 'out_of_order_attempt') &&
+            !isCheckpointLocked(l),
+    );
 };
 
 // Load QR scanner library dynamically from CDN
@@ -272,7 +296,8 @@ function loadQrScannerLibrary(): Promise<void> {
         const script = document.createElement('script');
         script.src = 'https://unpkg.com/html5-qrcode';
         script.onload = () => resolve();
-        script.onerror = () => reject(new Error('Failed to load QR scanner library.'));
+        script.onerror = () =>
+            reject(new Error('Failed to load QR scanner library.'));
         document.head.appendChild(script);
     });
 }
@@ -283,7 +308,10 @@ async function startScan(method: 'qr' | 'nfc') {
     if (!activeLog) return;
 
     // Photo required validation
-    if (activeLog.checkpoint.photo_requirement === 'required' && !checkpointPhoto.value) {
+    if (
+        activeLog.checkpoint.photo_requirement === 'required' &&
+        !checkpointPhoto.value
+    ) {
         alert('Photo capture is required for this checkpoint.');
         return;
     }
@@ -308,21 +336,29 @@ async function startScan(method: 'qr' | 'nfc') {
     if (method === 'qr') {
         if (CapacitorBridge.isNative()) {
             try {
-                const { CapacitorBarcodeScanner, CapacitorBarcodeScannerTypeHint } = await import('@capacitor/barcode-scanner');
+                const {
+                    CapacitorBarcodeScanner,
+                    CapacitorBarcodeScannerTypeHint,
+                } = await import('@capacitor/barcode-scanner');
                 const result = await CapacitorBarcodeScanner.scanBarcode({
-                    hint: CapacitorBarcodeScannerTypeHint.QR_CODE
+                    hint: CapacitorBarcodeScannerTypeHint.QR_CODE,
                 });
                 if (result && result.ScanResult) {
                     const decodedText = result.ScanResult;
-                    if (decodedText.trim().toLowerCase() === expectedCode.trim().toLowerCase()) {
+                    if (
+                        decodedText.trim().toLowerCase() ===
+                        expectedCode.trim().toLowerCase()
+                    ) {
                         executeScan('qr', sigData, decodedText);
                     } else {
-                        alert(`Scanned code "${decodedText}" does not match the expected checkpoint QR code ("${expectedCode}").`);
+                        alert(
+                            `Scanned code "${decodedText}" does not match the expected checkpoint QR code ("${expectedCode}").`,
+                        );
                     }
                 }
             } catch (e: any) {
-                console.error("Capacitor Barcode Scanner failed:", e);
-                alert("Failed to scan QR code: " + e.message);
+                console.error('Capacitor Barcode Scanner failed:', e);
+                alert('Failed to scan QR code: ' + e.message);
             }
         } else {
             showScanSimulator.value = true;
@@ -351,33 +387,42 @@ function startWebcamQrScanner(signatureBase64: string | null) {
         if (!qrReaderElement) return;
 
         try {
-            html5QrCodeInstance = new (window as any).Html5Qrcode("qr-reader");
+            html5QrCodeInstance = new (window as any).Html5Qrcode('qr-reader');
             const activeLog = getActiveLog();
             const expectedCode = activeLog?.checkpoint.qr_code || '';
 
-            html5QrCodeInstance.start(
-                { facingMode: "environment" },
-                {
-                    fps: 10,
-                    qrbox: { width: 220, height: 220 }
-                },
-                (decodedText: string) => {
-                    if (decodedText.trim().toLowerCase() === expectedCode.trim().toLowerCase()) {
-                        stopQrScanner();
-                        showScanSimulator.value = false;
-                        executeScan('qr', signatureBase64, decodedText);
-                    } else {
-                        alert(`Scanned code "${decodedText}" does not match the expected checkpoint QR code ("${expectedCode}").`);
-                    }
-                },
-                (errorMessage: string) => {}
-            ).catch((err: any) => {
-                console.error("Webcam init error:", err);
-                alert("Camera permission denied, or camera is currently occupied by another app.");
-                showScanSimulator.value = false;
-            });
+            html5QrCodeInstance
+                .start(
+                    { facingMode: 'environment' },
+                    {
+                        fps: 10,
+                        qrbox: { width: 220, height: 220 },
+                    },
+                    (decodedText: string) => {
+                        if (
+                            decodedText.trim().toLowerCase() ===
+                            expectedCode.trim().toLowerCase()
+                        ) {
+                            stopQrScanner();
+                            showScanSimulator.value = false;
+                            executeScan('qr', signatureBase64, decodedText);
+                        } else {
+                            alert(
+                                `Scanned code "${decodedText}" does not match the expected checkpoint QR code ("${expectedCode}").`,
+                            );
+                        }
+                    },
+                    (errorMessage: string) => {},
+                )
+                .catch((err: any) => {
+                    console.error('Webcam init error:', err);
+                    alert(
+                        'Camera permission denied, or camera is currently occupied by another app.',
+                    );
+                    showScanSimulator.value = false;
+                });
         } catch (e: any) {
-            alert("QR Scanner initialization failed: " + e.message);
+            alert('QR Scanner initialization failed: ' + e.message);
             showScanSimulator.value = false;
         }
     }, 400);
@@ -388,17 +433,23 @@ function stopQrScanner() {
     if (html5QrCodeInstance) {
         try {
             if (html5QrCodeInstance.isScanning) {
-                html5QrCodeInstance.stop().then(() => {
-                    html5QrCodeInstance = null;
-                }).catch((e: any) => {
-                    console.error("html5QrCodeInstance stop callback error:", e);
-                    html5QrCodeInstance = null;
-                });
+                html5QrCodeInstance
+                    .stop()
+                    .then(() => {
+                        html5QrCodeInstance = null;
+                    })
+                    .catch((e: any) => {
+                        console.error(
+                            'html5QrCodeInstance stop callback error:',
+                            e,
+                        );
+                        html5QrCodeInstance = null;
+                    });
             } else {
                 html5QrCodeInstance = null;
             }
         } catch (e) {
-            console.error("html5QrCodeInstance stop error:", e);
+            console.error('html5QrCodeInstance stop error:', e);
             html5QrCodeInstance = null;
         }
     }
@@ -407,15 +458,17 @@ function stopQrScanner() {
 // Helper to decode NDEF Text Record payload
 function decodeNdefTextRecord(payloadBytes: Uint8Array | number[]): string {
     if (!payloadBytes || payloadBytes.length === 0) return '';
-    const bytes = Array.isArray(payloadBytes) ? new Uint8Array(payloadBytes) : payloadBytes;
+    const bytes = Array.isArray(payloadBytes)
+        ? new Uint8Array(payloadBytes)
+        : payloadBytes;
     const statusByte = bytes[0];
     const isUtf16 = (statusByte & 0x80) !== 0;
     const languageCodeLength = statusByte & 0x3f;
-    
+
     if (1 + languageCodeLength > bytes.length) {
         return new TextDecoder().decode(bytes);
     }
-    
+
     const textBytes = bytes.subarray(1 + languageCodeLength);
     const decoder = new TextDecoder(isUtf16 ? 'utf-16' : 'utf-8');
     return decoder.decode(textBytes);
@@ -423,7 +476,8 @@ function decodeNdefTextRecord(payloadBytes: Uint8Array | number[]): string {
 
 // Start Capacitor NFC Tag Reader
 async function startCapacitorNfcReader(signatureBase64: string | null) {
-    nfcStatusMessage.value = 'Place the back of your phone directly on top of the NFC tag.';
+    nfcStatusMessage.value =
+        'Place the back of your phone directly on top of the NFC tag.';
     showNfcManualInput.value = false;
     nfcManualCode.value = '';
 
@@ -434,82 +488,102 @@ async function startCapacitorNfcReader(signatureBase64: string | null) {
         const { CapacitorNfc } = await import('@capgo/capacitor-nfc');
         const { supported } = await CapacitorNfc.isSupported();
         if (!supported) {
-            nfcStatusMessage.value = "NFC is not supported on this device.";
+            nfcStatusMessage.value = 'NFC is not supported on this device.';
             showNfcManualInput.value = true;
             return;
         }
 
         await CapacitorNfc.startScanning({
             invalidateAfterFirstRead: true,
-            alertMessage: 'Hold a tag near the device.'
+            alertMessage: 'Hold a tag near the device.',
         });
 
-        const listener = await CapacitorNfc.addListener('nfcEvent', (event: any) => {
-            const tagIdBytes = event.tag?.id;
-            let serialNumber = '';
-            if (Array.isArray(tagIdBytes)) {
-                serialNumber = tagIdBytes.map((b: number) => b.toString(16).padStart(2, '0')).join(':');
-            }
+        const listener = await CapacitorNfc.addListener(
+            'nfcEvent',
+            (event: any) => {
+                const tagIdBytes = event.tag?.id;
+                let serialNumber = '';
+                if (Array.isArray(tagIdBytes)) {
+                    serialNumber = tagIdBytes
+                        .map((b: number) => b.toString(16).padStart(2, '0'))
+                        .join(':');
+                }
 
-            let scannedVal = serialNumber;
-            let matched = false;
+                let scannedVal = serialNumber;
+                let matched = false;
 
-            if (serialNumber && (
-                serialNumber.toLowerCase() === expectedCode.toLowerCase() ||
-                serialNumber.replace(/:/g, '').toLowerCase() === expectedCode.toLowerCase()
-            )) {
-                matched = true;
-            }
+                if (
+                    serialNumber &&
+                    (serialNumber.toLowerCase() ===
+                        expectedCode.toLowerCase() ||
+                        serialNumber.replace(/:/g, '').toLowerCase() ===
+                            expectedCode.toLowerCase())
+                ) {
+                    matched = true;
+                }
 
-            if (event.tag?.ndefMessage) {
-                for (const record of event.tag.ndefMessage) {
-                    if (record.payload) {
-                        try {
-                            const isTextRecord = record.tnf === 1 && 
-                                                 Array.isArray(record.type) && 
-                                                 record.type.length === 1 && 
-                                                 record.type[0] === 84; // 84 is ASCII for 'T'
-                            
-                            let decodedText = '';
-                            if (isTextRecord) {
-                                decodedText = decodeNdefTextRecord(record.payload);
-                            } else {
-                                decodedText = new TextDecoder().decode(new Uint8Array(record.payload));
+                if (event.tag?.ndefMessage) {
+                    for (const record of event.tag.ndefMessage) {
+                        if (record.payload) {
+                            try {
+                                const isTextRecord =
+                                    record.tnf === 1 &&
+                                    Array.isArray(record.type) &&
+                                    record.type.length === 1 &&
+                                    record.type[0] === 84; // 84 is ASCII for 'T'
+
+                                let decodedText = '';
+                                if (isTextRecord) {
+                                    decodedText = decodeNdefTextRecord(
+                                        record.payload,
+                                    );
+                                } else {
+                                    decodedText = new TextDecoder().decode(
+                                        new Uint8Array(record.payload),
+                                    );
+                                }
+
+                                if (
+                                    decodedText.trim().toLowerCase() ===
+                                    expectedCode.toLowerCase()
+                                ) {
+                                    matched = true;
+                                    scannedVal = decodedText;
+                                    break;
+                                }
+                            } catch (e) {
+                                console.error(
+                                    'Error parsing Capacitor NFC record payload:',
+                                    e,
+                                );
                             }
-                            
-                            if (decodedText.trim().toLowerCase() === expectedCode.toLowerCase()) {
-                                matched = true;
-                                scannedVal = decodedText;
-                                break;
-                            }
-                        } catch (e) {
-                            console.error("Error parsing Capacitor NFC record payload:", e);
                         }
                     }
                 }
-            }
 
-            if (matched) {
-                cleanupNfc();
-                showScanSimulator.value = false;
-                executeScan('nfc', signatureBase64, scannedVal);
-            } else {
-                nfcStatusMessage.value = `Scanned NFC Tag ID "${scannedVal}" does not match the expected database checkpoint value ("${expectedCode}").`;
-            }
-        });
+                if (matched) {
+                    cleanupNfc();
+                    showScanSimulator.value = false;
+                    executeScan('nfc', signatureBase64, scannedVal);
+                } else {
+                    nfcStatusMessage.value = `Scanned NFC Tag ID "${scannedVal}" does not match the expected database checkpoint value ("${expectedCode}").`;
+                }
+            },
+        );
 
         (window as any).activeNfcListener = listener;
-
     } catch (error: any) {
-        console.error("Capacitor NFC reading failed:", error);
-        nfcStatusMessage.value = "NFC Reader is restricted or busy: " + error.message;
+        console.error('Capacitor NFC reading failed:', error);
+        nfcStatusMessage.value =
+            'NFC Reader is restricted or busy: ' + error.message;
         showNfcManualInput.value = true;
     }
 }
 
 // Start Web NFC tag reading session
 async function startNfcTagReader(signatureBase64: string | null) {
-    nfcStatusMessage.value = 'Place the back of your phone directly on top of the NFC tag.';
+    nfcStatusMessage.value =
+        'Place the back of your phone directly on top of the NFC tag.';
     showNfcManualInput.value = false;
     nfcManualCode.value = '';
 
@@ -522,60 +596,79 @@ async function startNfcTagReader(signatureBase64: string | null) {
             const ndef = new (window as any).NDEFReader();
             await ndef.scan({ signal: ndefAbortController.signal });
 
-            ndef.addEventListener("readingerror", () => {
-                nfcStatusMessage.value = "Error reading NFC tag. Try repositioning the phone closer to the tag.";
+            ndef.addEventListener('readingerror', () => {
+                nfcStatusMessage.value =
+                    'Error reading NFC tag. Try repositioning the phone closer to the tag.';
             });
 
-            ndef.addEventListener("reading", ({ message, serialNumber }: any) => {
-                let matched = false;
-                let scannedVal = serialNumber || '';
+            ndef.addEventListener(
+                'reading',
+                ({ message, serialNumber }: any) => {
+                    let matched = false;
+                    let scannedVal = serialNumber || '';
 
-                if (serialNumber && (
-                    serialNumber.toLowerCase() === expectedCode.toLowerCase() ||
-                    serialNumber.replace(/:/g, '').toLowerCase() === expectedCode.toLowerCase()
-                )) {
-                    matched = true;
-                }
+                    if (
+                        serialNumber &&
+                        (serialNumber.toLowerCase() ===
+                            expectedCode.toLowerCase() ||
+                            serialNumber.replace(/:/g, '').toLowerCase() ===
+                                expectedCode.toLowerCase())
+                    ) {
+                        matched = true;
+                    }
 
-                // Parse records
-                if (message && message.records) {
-                    for (const record of message.records) {
-                        try {
-                            let text = '';
-                            if (record.recordType === 'text') {
-                                const payloadBytes = new Uint8Array(record.data.buffer);
-                                text = decodeNdefTextRecord(payloadBytes);
-                            } else {
-                                const textDecoder = new TextDecoder(record.encoding || 'utf-8');
-                                text = textDecoder.decode(record.data);
+                    // Parse records
+                    if (message && message.records) {
+                        for (const record of message.records) {
+                            try {
+                                let text = '';
+                                if (record.recordType === 'text') {
+                                    const payloadBytes = new Uint8Array(
+                                        record.data.buffer,
+                                    );
+                                    text = decodeNdefTextRecord(payloadBytes);
+                                } else {
+                                    const textDecoder = new TextDecoder(
+                                        record.encoding || 'utf-8',
+                                    );
+                                    text = textDecoder.decode(record.data);
+                                }
+
+                                if (
+                                    text.trim().toLowerCase() ===
+                                    expectedCode.toLowerCase()
+                                ) {
+                                    matched = true;
+                                    scannedVal = text;
+                                    break;
+                                }
+                            } catch (e) {
+                                console.error(
+                                    'Error parsing Web NFC record data:',
+                                    e,
+                                );
                             }
-                            
-                            if (text.trim().toLowerCase() === expectedCode.toLowerCase()) {
-                                matched = true;
-                                scannedVal = text;
-                                break;
-                            }
-                        } catch (e) {
-                            console.error("Error parsing Web NFC record data:", e);
                         }
                     }
-                }
 
-                if (matched) {
-                    cleanupNfc();
-                    showScanSimulator.value = false;
-                    executeScan('nfc', signatureBase64, scannedVal);
-                } else {
-                    nfcStatusMessage.value = `Scanned NFC Tag ID "${scannedVal}" does not match the expected database checkpoint value ("${expectedCode}").`;
-                }
-            });
+                    if (matched) {
+                        cleanupNfc();
+                        showScanSimulator.value = false;
+                        executeScan('nfc', signatureBase64, scannedVal);
+                    } else {
+                        nfcStatusMessage.value = `Scanned NFC Tag ID "${scannedVal}" does not match the expected database checkpoint value ("${expectedCode}").`;
+                    }
+                },
+            );
         } catch (error: any) {
-            console.error("NFC reading failed:", error);
-            nfcStatusMessage.value = "NFC Reader is restricted or busy: " + error.message;
+            console.error('NFC reading failed:', error);
+            nfcStatusMessage.value =
+                'NFC Reader is restricted or busy: ' + error.message;
             showNfcManualInput.value = true;
         }
     } else {
-        nfcStatusMessage.value = "Web NFC (NDEFReader) is not supported on this browser/device (iOS requires native wrappers).";
+        nfcStatusMessage.value =
+            'Web NFC (NDEFReader) is not supported on this browser/device (iOS requires native wrappers).';
         showNfcManualInput.value = true;
     }
 }
@@ -594,7 +687,7 @@ async function cleanupNfc() {
             }
             await CapacitorNfc.stopScanning();
         } catch (e) {
-            console.error("Failed to stop Capacitor NFC scanning:", e);
+            console.error('Failed to stop Capacitor NFC scanning:', e);
         }
     }
 }
@@ -602,12 +695,16 @@ async function cleanupNfc() {
 function submitNfcManual(signatureBase64: string | null) {
     const activeLog = getActiveLog();
     const expectedCode = activeLog?.checkpoint.nfc_tag_id || '';
-    if (nfcManualCode.value.trim().toLowerCase() === expectedCode.toLowerCase()) {
+    if (
+        nfcManualCode.value.trim().toLowerCase() === expectedCode.toLowerCase()
+    ) {
         cleanupNfc();
         showScanSimulator.value = false;
         executeScan('nfc', signatureBase64, nfcManualCode.value.trim());
     } else {
-        alert(`Entered code "${nfcManualCode.value}" does not match the expected tag ID.`);
+        alert(
+            `Entered code "${nfcManualCode.value}" does not match the expected tag ID.`,
+        );
     }
 }
 
@@ -625,18 +722,25 @@ function base64ToFile(base64Data: string, filename: string): File {
 }
 
 // Scan processing with real code verification
-async function executeScan(method: 'qr' | 'nfc', signatureBase64: string | null, scannedCodeVal?: string) {
+async function executeScan(
+    method: 'qr' | 'nfc',
+    signatureBase64: string | null,
+    scannedCodeVal?: string,
+) {
     const log = getActiveLog();
     if (!log || !props.activePatrol) return;
 
     currentLoadingId.value = log.id;
-    
+
     // Retrieve device location
     const gps = await updateLocation();
-    const lat = gps ? gps.latitude : 34.671200;
-    const lon = gps ? gps.longitude : 33.041200;
+    const lat = gps ? gps.latitude : 34.6712;
+    const lon = gps ? gps.longitude : 33.0412;
 
-    const expectedCode = method === 'qr' ? (log.checkpoint.qr_code || 'DEMO-QR') : (log.checkpoint.nfc_tag_id || 'DEMO-NFC');
+    const expectedCode =
+        method === 'qr'
+            ? log.checkpoint.qr_code || 'DEMO-QR'
+            : log.checkpoint.nfc_tag_id || 'DEMO-NFC';
     const scannedCode = scannedCodeVal || expectedCode;
 
     const payload = {
@@ -644,7 +748,7 @@ async function executeScan(method: 'qr' | 'nfc', signatureBase64: string | null,
         latitude: lat,
         longitude: lon,
         note: checkpointNote.value || null,
-        scanned_code: scannedCode
+        scanned_code: scannedCode,
     };
 
     if (isOnline.value) {
@@ -658,7 +762,10 @@ async function executeScan(method: 'qr' | 'nfc', signatureBase64: string | null,
                 formData.append('note', checkpointNote.value);
             }
             if (checkpointPhoto.value) {
-                const photoFile = base64ToFile(checkpointPhoto.value, 'checkpoint_photo.jpg');
+                const photoFile = base64ToFile(
+                    checkpointPhoto.value,
+                    'checkpoint_photo.jpg',
+                );
                 formData.append('media_file', photoFile);
             }
             if (signatureBase64) {
@@ -669,16 +776,18 @@ async function executeScan(method: 'qr' | 'nfc', signatureBase64: string | null,
             await axios.post(
                 `/api/guard/patrols/${props.activePatrol.id}/checkpoints/${log.route_checkpoint_id}/scan`,
                 formData,
-                { headers: { 'Content-Type': 'multipart/form-data' } }
+                { headers: { 'Content-Type': 'multipart/form-data' } },
             );
 
             log.status = 'scanned';
             log.scanned_at = new Date().toISOString();
             log.scan_method_used = method;
             log.note = checkpointNote.value;
-            props.activePatrol.completed_checkpoints++;
+            emit('checkpoint-scanned');
 
-            alert(`✅ SUCCESS: Checkpoint "${log.checkpoint.name}" scanned successfully.`);
+            alert(
+                `✅ SUCCESS: Checkpoint "${log.checkpoint.name}" scanned successfully.`,
+            );
         } catch (e: any) {
             console.error('Direct scan failed, queuing offline:', e);
             queueOfflineScan(log, payload, method, signatureBase64);
@@ -695,7 +804,12 @@ async function executeScan(method: 'qr' | 'nfc', signatureBase64: string | null,
     checkPatrolCompletion();
 }
 
-function queueOfflineScan(log: CheckpointLog, payload: any, method: string, signatureBase64: string | null) {
+function queueOfflineScan(
+    log: CheckpointLog,
+    payload: any,
+    method: string,
+    signatureBase64: string | null,
+) {
     payload.status = 'scanned';
     payload.patrol_id = props.activePatrol.id;
     payload.route_checkpoint_id = log.route_checkpoint_id;
@@ -709,7 +823,7 @@ function queueOfflineScan(log: CheckpointLog, payload: any, method: string, sign
             kind: 'photo',
             mime_type: 'image/jpeg',
             latitude: payload.latitude,
-            longitude: payload.longitude
+            longitude: payload.longitude,
         });
     }
 
@@ -717,34 +831,44 @@ function queueOfflineScan(log: CheckpointLog, payload: any, method: string, sign
     log.scanned_at = new Date().toISOString();
     log.scan_method_used = method;
     log.note = checkpointNote.value;
-    props.activePatrol.completed_checkpoints++;
+    emit('checkpoint-scanned');
 
-    alert(`💾 OFFLINE SAVED: Checkpoint "${log.checkpoint.name}" scanned offline. It will synchronize automatically when connection is restored.`);
+    alert(
+        `💾 OFFLINE SAVED: Checkpoint "${log.checkpoint.name}" scanned offline. It will synchronize automatically when connection is restored.`,
+    );
 }
 
 async function executeSkip() {
-    if (!skipModalCheckpoint.value || !skipReason.value.trim() || !props.activePatrol) return;
+    if (
+        !skipModalCheckpoint.value ||
+        !skipReason.value.trim() ||
+        !props.activePatrol
+    )
+        return;
 
     const log = skipModalCheckpoint.value;
     currentLoadingId.value = log.id;
-    
+
     const reason = skipReason.value;
     const payload = {
         patrol_id: props.activePatrol.id,
         route_checkpoint_id: log.route_checkpoint_id,
         status: 'skipped',
-        skip_reason: reason
+        skip_reason: reason,
     };
 
     if (isOnline.value) {
         try {
-            await axios.post(`/api/guard/patrols/${props.activePatrol.id}/checkpoints/${log.route_checkpoint_id}/skip`, {
-                skip_reason: reason
-            });
+            await axios.post(
+                `/api/guard/patrols/${props.activePatrol.id}/checkpoints/${log.route_checkpoint_id}/skip`,
+                {
+                    skip_reason: reason,
+                },
+            );
             log.status = 'skipped';
             log.skip_reason = reason;
             log.skipped_at = new Date().toISOString();
-            props.activePatrol.skipped_checkpoints++;
+            emit('checkpoint-skipped');
         } catch (e: any) {
             console.error('Direct skip failed, queuing offline:', e);
             queueOfflineSkip(log, payload, reason);
@@ -765,7 +889,7 @@ function queueOfflineSkip(log: CheckpointLog, payload: any, reason: string) {
     log.status = 'skipped';
     log.skip_reason = reason;
     log.skipped_at = new Date().toISOString();
-    props.activePatrol.skipped_checkpoints++;
+    emit('checkpoint-skipped');
 }
 
 // Trigger photo capture, forcing native camera inside Capacitor, or using capture attribute in web
@@ -776,13 +900,13 @@ async function handleCapturePhoto(logId: number) {
                 quality: 85,
                 allowEditing: false,
                 resultType: CameraResultType.DataUrl,
-                source: CameraSource.Camera // STRICTLY FORCES THE CAMERA (disables gallery picker)
+                source: CameraSource.Camera, // STRICTLY FORCES THE CAMERA (disables gallery picker)
             });
             if (image && image.dataUrl) {
                 checkpointPhoto.value = image.dataUrl;
             }
         } catch (error: any) {
-            console.error("Capacitor camera failed:", error);
+            console.error('Capacitor camera failed:', error);
             triggerWebCameraInput(logId);
         }
     } else {
@@ -815,19 +939,19 @@ function handlePhotoCaptured(e: Event) {
 
 async function handleCompletePatrol() {
     if (!props.activePatrol) return;
-    
+
     completionLoading.value = true;
     completionError.value = null;
-    
+
     let sigData = null;
     if (completionSigCanvasRef.value) {
         sigData = completionSigCanvasRef.value.toDataURL('image/png');
     }
-    
+
     const gps = await updateLocation();
     const lat = gps ? gps.latitude : null;
     const lon = gps ? gps.longitude : null;
-    
+
     if (isOnline.value) {
         try {
             const formData = new FormData();
@@ -841,19 +965,28 @@ async function handleCompletePatrol() {
                 formData.append('completion_longitude', lon.toString());
             }
             if (sigData && sigData.length > 1500) {
-                const sigFile = base64ToFile(sigData, 'completion_signature.png');
+                const sigFile = base64ToFile(
+                    sigData,
+                    'completion_signature.png',
+                );
                 formData.append('completion_signature', sigFile);
             }
-            
-            await axios.post(`/api/guard/patrols/${props.activePatrol.id}/complete`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            
+
+            await axios.post(
+                `/api/guard/patrols/${props.activePatrol.id}/complete`,
+                formData,
+                {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                },
+            );
+
             localStorage.removeItem(`patrol_logs_${props.activePatrol.id}`);
             emit('patrol-completed');
         } catch (e: any) {
             console.error(e);
-            completionError.value = e.response?.data?.message || 'Failed to complete patrol session online.';
+            completionError.value =
+                e.response?.data?.message ||
+                'Failed to complete patrol session online.';
             queueOfflineCompletion(sigData, lat, lon);
         }
     } else {
@@ -861,431 +994,787 @@ async function handleCompletePatrol() {
     }
 }
 
-function queueOfflineCompletion(signatureBase64: string | null, lat: number | null, lon: number | null) {
+function queueOfflineCompletion(
+    signatureBase64: string | null,
+    lat: number | null,
+    lon: number | null,
+) {
     const payload = {
         patrol_id: props.activePatrol.id,
         general_note: generalNote.value,
         completion_latitude: lat,
         completion_longitude: lon,
-        signature_base64: signatureBase64
+        signature_base64: signatureBase64,
     };
-    localStorage.setItem('patrol_offline_completion_pending', JSON.stringify(payload));
+    localStorage.setItem(
+        'patrol_offline_completion_pending',
+        JSON.stringify(payload),
+    );
     emit('patrol-completed');
 }
 
 onMounted(() => {
     loadPatrolLogs();
     checkPatrolCompletion();
-    
-    watch(() => getActiveLog(), (newLog) => {
-        if (newLog && newLog.checkpoint.signature_required) {
-            setTimeout(() => {
-                initSignature(sigCanvasRefs.value[newLog.id]);
-            }, 100);
-        }
-    }, { immediate: true });
+
+    watch(
+        () => getActiveLog(),
+        (newLog) => {
+            if (newLog && newLog.checkpoint.signature_required) {
+                setTimeout(() => {
+                    initSignature(sigCanvasRefs.value[newLog.id]);
+                }, 100);
+            }
+        },
+        { immediate: true },
+    );
 });
 </script>
 
 <template>
-  <div class="space-y-6">
-    <!-- If no active patrol -->
-    <div v-if="!activePatrol" class="bg-slate-900/40 border border-slate-800/80 rounded-3xl p-10 text-center py-16 animate-fadeIn">
-      <div class="w-16 h-16 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto mb-5">
-        <svg class="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
-        </svg>
-      </div>
-      <h3 class="text-base font-bold text-slate-300">No Active Patrol Shift</h3>
-      <p class="text-xs text-slate-500 mt-2 max-w-xs mx-auto leading-relaxed">Please go to the Home tab, select one of your assigned patrol routes, and start shift to tracking checkpoints.</p>
-      <button @click="emit('navigate', 'dashboard')" class="mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider px-5 py-3 rounded-xl transition-all shadow-md active:scale-95"> View Patrol Routes </button>
-    </div>
-
-    <!-- If active patrol is present -->
-    <div v-else class="space-y-6 animate-fadeIn">
-      <!-- Patrol Route Info Bar -->
-      <div class="bg-slate-900 border border-slate-850 rounded-2xl p-4 flex justify-between items-center">
-        <div>
-          <h3 class="text-sm font-bold text-slate-100">{{ routeDetails?.name || activePatrol.route?.name || 'Port Security Shift' }}</h3>
-          <p class="text-[10px] text-slate-500 mt-0.5">Enforced Order: {{ routeDetails?.enforce_order ? 'Strict Sequential' : 'Flexible' }}</p>
-        </div>
-        <div class="text-right">
-          <span class="text-[10px] font-mono font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2.5 py-1 rounded-lg">
-            {{ activePatrol.completed_checkpoints }}/{{ activePatrol.total_checkpoints }} Checked
-          </span>
-        </div>
-      </div>
-
-      <!-- CHECKPOINT STEP LOG LIST -->
-      <div class="space-y-3">
-        <div class="flex items-center justify-between pl-1">
-          <h4 class="text-xs font-black tracking-wider text-slate-400 uppercase">Route Checklist</h4>
-          <button 
-              v-if="!logsLoading"
-              @click="loadPatrolLogs"
-              class="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold flex items-center gap-1 bg-indigo-500/5 px-2 py-1 rounded-lg border border-indigo-500/10 transition-all"
-              title="Refresh checkpoint status from server"
-          >
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
-            Refresh
-          </button>
-        </div>
-
-        <!-- Loading logs -->
-        <div v-if="logsLoading" class="flex items-center justify-center gap-3 py-10 text-slate-500">
-          <div class="w-5 h-5 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-          <span class="text-xs">Loading checkpoint data...</span>
-        </div>
-
-        <!-- Error state -->
-        <div v-else-if="logsError" class="bg-rose-500/10 border border-rose-500/20 rounded-2xl px-4 py-5 text-center space-y-3">
-          <p class="text-xs text-rose-400">{{ logsError }}</p>
-          <button @click="loadPatrolLogs" class="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-500 px-4 py-2 rounded-xl active:scale-95 transition-all">
-            Retry
-          </button>
-        </div>
-
-        <template v-else>
-          <div 
-            v-for="log in logs" 
-            :key="log.id"
-            class="bg-slate-900 border rounded-2xl p-4 transition-all duration-200"
-            :class="[
-              log.status === 'scanned' ? 'border-emerald-500/20 bg-emerald-950/5' : '',
-              log.status === 'skipped' ? 'border-amber-500/20 bg-amber-950/5' : '',
-              log.status === 'pending' && !isCheckpointLocked(log) ? 'border-indigo-500/30 ring-1 ring-indigo-500/20' : 'border-slate-850',
-              isCheckpointLocked(log) ? 'opacity-40 select-none' : ''
-            ]"
-          >
-            <div class="flex items-start justify-between">
-              <div class="flex items-start space-x-3">
-                <!-- Number/Status badge -->
-                <div 
-                  class="w-6 h-6 rounded-lg font-mono text-xs font-bold flex items-center justify-center mt-0.5 border"
-                  :class="[
-                    log.status === 'scanned' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : '',
-                    log.status === 'skipped' ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : '',
-                    log.status === 'pending' && !isCheckpointLocked(log) ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' : 'bg-slate-950 text-slate-600 border-slate-800'
-                  ]"
-                >
-                  <svg v-if="log.status === 'scanned'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                  </svg>
-                  <svg v-else-if="log.status === 'skipped'" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <span v-else>{{ log.position }}</span>
-                </div>
-
-                <div>
-                  <h5 class="text-xs font-bold" :class="log.status === 'scanned' ? 'text-slate-300' : 'text-slate-100'">
-                    {{ log.checkpoint.name }}
-                  </h5>
-                  <p class="text-[11px] text-slate-500 mt-1 leading-relaxed">{{ log.checkpoint.description }}</p>
-                </div>
-              </div>
-
-              <!-- Lock or Skip action -->
-              <div class="flex items-center space-x-2">
-                <span v-if="isCheckpointLocked(log)" class="text-slate-600" title="Locked by order sequence">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </span>
-                <!-- Skip Button -->
-                <button 
-                  v-else-if="log.status === 'pending' && routeDetails?.allow_skip" 
-                  @click="skipModalCheckpoint = log"
-                  class="text-[10px] text-amber-500 hover:text-amber-400 font-bold uppercase tracking-wider bg-amber-500/5 px-2.5 py-1 rounded-lg border border-amber-500/10 active:scale-95"
-                >
-                  Skip
-                </button>
-              </div>
-            </div>
-
-            <!-- EXPANDED SCAN UTILITY (For Current Active Checkpoint) -->
-            <div 
-              v-if="log.status === 'pending' && !isCheckpointLocked(log)"
-              class="mt-4 pt-4 border-t border-slate-800/80 space-y-4 animate-fadeIn"
+    <div class="space-y-6">
+        <!-- If no active patrol -->
+        <div
+            v-if="!activePatrol"
+            class="animate-fadeIn rounded-3xl border border-slate-800/80 bg-slate-900/40 p-10 py-16 text-center"
+        >
+            <div
+                class="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-slate-800 bg-slate-900"
             >
-              <!-- Checkpoint Requirements tags -->
-              <div class="flex flex-wrap gap-1.5 text-[9px] font-bold text-slate-400">
-                <span class="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 flex items-center">
-                  METHOD: {{ log.checkpoint.scan_method.toUpperCase() }}
-                </span>
-                <span 
-                  v-if="log.checkpoint.photo_requirement !== 'off'"
-                  class="px-2 py-0.5 rounded border flex items-center"
-                  :class="log.checkpoint.photo_requirement === 'required' ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' : 'bg-slate-950 border-slate-800 text-slate-400'"
+                <svg
+                    class="h-8 w-8 text-slate-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                 >
-                  PHOTO: {{ log.checkpoint.photo_requirement.toUpperCase() }}
-                </span>
-                <span 
-                  v-if="log.checkpoint.signature_required"
-                  class="bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded flex items-center"
-                >
-                  SIGNATURE REQUIRED
-                </span>
-              </div>
-
-              <!-- Optional Note Input -->
-              <div>
-                <textarea 
-                  v-model="checkpointNote"
-                  rows="2"
-                  class="w-full bg-slate-950 border border-slate-850 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-100 p-2.5 rounded-xl text-xs focus:outline-none"
-                  placeholder="Add notes (optional)..."
-                ></textarea>
-              </div>
-
-              <!-- Real Photo Capture Camera Hook -->
-              <div v-if="log.checkpoint.photo_requirement !== 'off'" class="space-y-2">
-                <div class="flex items-center space-x-3">
-                  <input 
-                    type="file" 
-                    :ref="el => { if (el) photoInputRefs[log.id] = el as any }" 
-                    accept="image/*" 
-                    capture="environment" 
-                    class="hidden" 
-                    @change="handlePhotoCaptured" 
-                  />
-                  <button 
-                    @click="handleCapturePhoto(log.id)" 
-                    class="py-2.5 px-4 bg-slate-850 hover:bg-slate-800 text-slate-200 border border-slate-800 text-xs font-bold rounded-xl active:scale-95 transition-all flex items-center space-x-2"
-                  >
-                    <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span>Capture Checkpoint Photo</span>
-                  </button>
-                  <span v-if="checkpointPhoto" class="text-[10px] text-emerald-400 font-bold flex items-center space-x-1">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                    </svg>
-                    <span>Photo Captured</span>
-                  </span>
-                </div>
-                <div v-if="checkpointPhoto" class="w-24 aspect-video border border-slate-800 rounded-lg overflow-hidden bg-slate-950">
-                  <img :src="checkpointPhoto" class="w-full h-full object-cover" />
-                </div>
-              </div>
-
-              <!-- Dynamic Signature Canvas Box -->
-              <div v-if="log.checkpoint.signature_required" class="space-y-2">
-                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Digital Sign-off</label>
-                <div class="relative bg-slate-950 border border-slate-850 rounded-xl overflow-hidden">
-                  <canvas 
-                    :ref="el => { if (el) sigCanvasRefs[log.id] = el as any }" 
-                    width="320" 
-                    height="120"
-                    class="w-full h-[120px] bg-slate-950 cursor-crosshair touch-none"
-                  ></canvas>
-                  <button 
-                    @click="clearSignature(sigCanvasRefs[log.id])"
-                    class="absolute right-2 bottom-2 bg-slate-900/80 backdrop-blur border border-slate-800 text-[10px] uppercase tracking-wide font-bold px-2 py-1 rounded text-slate-400"
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-
-              <!-- Interactive Scan Buttons -->
-              <div class="grid grid-cols-2 gap-3">
-                <button 
-                  v-if="log.checkpoint.scan_method === 'qr' || log.checkpoint.scan_method === 'both'"
-                  @click="startScan('qr')"
-                  :disabled="currentLoadingId === log.id"
-                  class="py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs uppercase tracking-wider shadow-md active:scale-95 transition-all flex items-center justify-center space-x-2"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                  </svg>
-                  <span>Scan QR Code</span>
-                </button>
-
-                <button 
-                  v-if="log.checkpoint.scan_method === 'nfc' || log.checkpoint.scan_method === 'both'"
-                  @click="startScan('nfc')"
-                  :disabled="currentLoadingId === log.id"
-                  class="py-3.5 bg-violet-650 hover:bg-violet-600 text-white font-bold rounded-xl text-xs uppercase tracking-wider shadow-md active:scale-95 transition-all flex items-center justify-center space-x-2"
-                  :class="log.checkpoint.scan_method === 'nfc' ? 'col-span-2' : ''"
-                >
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                  <span>Scan NFC Tag</span>
-                </button>
-              </div>
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                    ></path>
+                </svg>
             </div>
-          </div>
-        </template>
-      </div>
-
-      <!-- COMPLETE PATROL REPORT SCREEN (Visible when checklist complete) -->
-      <div 
-        v-if="showCompletePanel" 
-        class="bg-slate-900 border border-emerald-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/20 rounded-3xl p-5 shadow-xl space-y-4 animate-fadeIn"
-      >
-        <div class="flex items-center space-x-2 text-emerald-400">
-          <svg class="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h4 class="text-sm font-bold uppercase tracking-wider">Patrol Route Completed</h4>
-        </div>
-        <p class="text-xs text-slate-400 leading-relaxed">All route checkpoints have been checked or skipped. Please sign off and submit the patrol report below.</p>
-
-        <!-- General Shift Note -->
-        <div>
-          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">General Patrol Notes</label>
-          <textarea 
-            v-model="generalNote"
-            rows="3"
-            class="w-full bg-slate-950 border border-slate-850 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-100 p-2.5 rounded-xl text-xs focus:outline-none"
-            placeholder="Provide details about gates, security observations, shift occurrences..."
-          ></textarea>
-        </div>
-
-        <!-- Complete Sign-off signature pad -->
-        <div class="space-y-2">
-          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Guard Final Signature</label>
-          <div class="relative bg-slate-950 border border-slate-850 rounded-xl overflow-hidden">
-            <canvas 
-              ref="completionSigCanvasRef" 
-              width="320" 
-              height="130"
-              class="w-full h-[130px] bg-slate-950 cursor-crosshair touch-none"
-            ></canvas>
-            <button 
-              @click="clearSignature(completionSigCanvasRef)"
-              class="absolute right-2 bottom-2 bg-slate-900/80 backdrop-blur border border-slate-800 text-[10px] uppercase tracking-wide font-bold px-2 py-1 rounded text-slate-400"
+            <h3 class="text-base font-bold text-slate-300">
+                No Active Patrol Shift
+            </h3>
+            <p
+                class="mx-auto mt-2 max-w-xs text-xs leading-relaxed text-slate-500"
             >
-              Clear
+                Please go to the Home tab, select one of your assigned patrol
+                routes, and start shift to tracking checkpoints.
+            </p>
+            <button
+                @click="emit('navigate', 'dashboard')"
+                class="mt-6 rounded-xl bg-indigo-600 px-5 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-all hover:bg-indigo-500 active:scale-95"
+            >
+                View Patrol Routes
             </button>
-          </div>
         </div>
 
-        <div v-if="completionError" class="text-xs text-rose-400 text-center font-medium bg-rose-500/10 p-2.5 rounded-xl">
-          {{ completionError }}
+        <!-- If active patrol is present -->
+        <div v-else class="animate-fadeIn space-y-6">
+            <!-- Patrol Route Info Bar -->
+            <div
+                class="border-slate-850 flex items-center justify-between rounded-2xl border bg-slate-900 p-4"
+            >
+                <div>
+                    <h3 class="text-sm font-bold text-slate-100">
+                        {{
+                            routeDetails?.name ||
+                            activePatrol.route?.name ||
+                            'Port Security Shift'
+                        }}
+                    </h3>
+                    <p class="mt-0.5 text-[10px] text-slate-500">
+                        Enforced Order:
+                        {{
+                            routeDetails?.enforce_order
+                                ? 'Strict Sequential'
+                                : 'Flexible'
+                        }}
+                    </p>
+                </div>
+                <div class="text-right">
+                    <span
+                        class="rounded-lg border border-indigo-500/20 bg-indigo-500/10 px-2.5 py-1 font-mono text-[10px] font-bold text-indigo-400"
+                    >
+                        {{ activePatrol.completed_checkpoints }}/{{
+                            activePatrol.total_checkpoints
+                        }}
+                        Checked
+                    </span>
+                </div>
+            </div>
+
+            <!-- CHECKPOINT STEP LOG LIST -->
+            <div class="space-y-3">
+                <div class="flex items-center justify-between pl-1">
+                    <h4
+                        class="text-xs font-black uppercase tracking-wider text-slate-400"
+                    >
+                        Route Checklist
+                    </h4>
+                    <button
+                        v-if="!logsLoading"
+                        @click="loadPatrolLogs"
+                        class="flex items-center gap-1 rounded-lg border border-indigo-500/10 bg-indigo-500/5 px-2 py-1 text-[10px] font-bold text-indigo-400 transition-all hover:text-indigo-300"
+                        title="Refresh checkpoint status from server"
+                    >
+                        <svg
+                            class="h-3 w-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                            />
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+
+                <!-- Loading logs -->
+                <div
+                    v-if="logsLoading"
+                    class="flex items-center justify-center gap-3 py-10 text-slate-500"
+                >
+                    <div
+                        class="h-5 w-5 animate-spin rounded-full border-2 border-indigo-500/30 border-t-indigo-500"
+                    ></div>
+                    <span class="text-xs">Loading checkpoint data...</span>
+                </div>
+
+                <!-- Error state -->
+                <div
+                    v-else-if="logsError"
+                    class="space-y-3 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-5 text-center"
+                >
+                    <p class="text-xs text-rose-400">{{ logsError }}</p>
+                    <button
+                        @click="loadPatrolLogs"
+                        class="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white transition-all hover:bg-indigo-500 active:scale-95"
+                    >
+                        Retry
+                    </button>
+                </div>
+
+                <template v-else>
+                    <div
+                        v-for="log in logs"
+                        :key="log.id"
+                        class="rounded-2xl border bg-slate-900 p-4 transition-all duration-200"
+                        :class="[
+                            log.status === 'scanned'
+                                ? 'border-emerald-500/20 bg-emerald-950/5'
+                                : '',
+                            log.status === 'skipped'
+                                ? 'border-amber-500/20 bg-amber-950/5'
+                                : '',
+                            log.status === 'pending' && !isCheckpointLocked(log)
+                                ? 'border-indigo-500/30 ring-1 ring-indigo-500/20'
+                                : 'border-slate-850',
+                            isCheckpointLocked(log)
+                                ? 'select-none opacity-40'
+                                : '',
+                        ]"
+                    >
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-start space-x-3">
+                                <!-- Number/Status badge -->
+                                <div
+                                    class="mt-0.5 flex h-6 w-6 items-center justify-center rounded-lg border font-mono text-xs font-bold"
+                                    :class="[
+                                        log.status === 'scanned'
+                                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                                            : '',
+                                        log.status === 'skipped'
+                                            ? 'border-amber-500/30 bg-amber-500/10 text-amber-400'
+                                            : '',
+                                        log.status === 'pending' &&
+                                        !isCheckpointLocked(log)
+                                            ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-400'
+                                            : 'border-slate-800 bg-slate-950 text-slate-600',
+                                    ]"
+                                >
+                                    <svg
+                                        v-if="log.status === 'scanned'"
+                                        class="h-3.5 w-3.5"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="3"
+                                            d="M5 13l4 4L19 7"
+                                        />
+                                    </svg>
+                                    <svg
+                                        v-else-if="log.status === 'skipped'"
+                                        class="h-3.5 w-3.5"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                                        />
+                                    </svg>
+                                    <span v-else>{{ log.position }}</span>
+                                </div>
+
+                                <div>
+                                    <h5
+                                        class="text-xs font-bold"
+                                        :class="
+                                            log.status === 'scanned'
+                                                ? 'text-slate-300'
+                                                : 'text-slate-100'
+                                        "
+                                    >
+                                        {{ log.checkpoint.name }}
+                                    </h5>
+                                    <p
+                                        class="mt-1 text-[11px] leading-relaxed text-slate-500"
+                                    >
+                                        {{ log.checkpoint.description }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Lock or Skip action -->
+                            <div class="flex items-center space-x-2">
+                                <span
+                                    v-if="isCheckpointLocked(log)"
+                                    class="text-slate-600"
+                                    title="Locked by order sequence"
+                                >
+                                    <svg
+                                        class="h-4 w-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                                        />
+                                    </svg>
+                                </span>
+                                <!-- Skip Button -->
+                                <button
+                                    v-else-if="
+                                        log.status === 'pending' &&
+                                        routeDetails?.allow_skip
+                                    "
+                                    @click="skipModalCheckpoint = log"
+                                    class="rounded-lg border border-amber-500/10 bg-amber-500/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-500 hover:text-amber-400 active:scale-95"
+                                >
+                                    Skip
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- EXPANDED SCAN UTILITY (For Current Active Checkpoint) -->
+                        <div
+                            v-if="
+                                log.status === 'pending' &&
+                                !isCheckpointLocked(log)
+                            "
+                            class="animate-fadeIn mt-4 space-y-4 border-t border-slate-800/80 pt-4"
+                        >
+                            <!-- Checkpoint Requirements tags -->
+                            <div
+                                class="flex flex-wrap gap-1.5 text-[9px] font-bold text-slate-400"
+                            >
+                                <span
+                                    class="flex items-center rounded border border-slate-800 bg-slate-950 px-2 py-0.5"
+                                >
+                                    METHOD:
+                                    {{
+                                        log.checkpoint.scan_method.toUpperCase()
+                                    }}
+                                </span>
+                                <span
+                                    v-if="
+                                        log.checkpoint.photo_requirement !==
+                                        'off'
+                                    "
+                                    class="flex items-center rounded border px-2 py-0.5"
+                                    :class="
+                                        log.checkpoint.photo_requirement ===
+                                        'required'
+                                            ? 'border-indigo-500/20 bg-indigo-500/10 text-indigo-400'
+                                            : 'border-slate-800 bg-slate-950 text-slate-400'
+                                    "
+                                >
+                                    PHOTO:
+                                    {{
+                                        log.checkpoint.photo_requirement.toUpperCase()
+                                    }}
+                                </span>
+                                <span
+                                    v-if="log.checkpoint.signature_required"
+                                    class="flex items-center rounded border border-indigo-500/20 bg-indigo-500/10 px-2 py-0.5 text-indigo-400"
+                                >
+                                    SIGNATURE REQUIRED
+                                </span>
+                            </div>
+
+                            <!-- Optional Note Input -->
+                            <div>
+                                <textarea
+                                    v-model="checkpointNote"
+                                    rows="2"
+                                    class="border-slate-850 w-full rounded-xl border bg-slate-950 p-2.5 text-xs text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    placeholder="Add notes (optional)..."
+                                ></textarea>
+                            </div>
+
+                            <!-- Real Photo Capture Camera Hook -->
+                            <div
+                                v-if="
+                                    log.checkpoint.photo_requirement !== 'off'
+                                "
+                                class="space-y-2"
+                            >
+                                <div class="flex items-center space-x-3">
+                                    <input
+                                        type="file"
+                                        :ref="
+                                            (el) => {
+                                                if (el)
+                                                    photoInputRefs[log.id] =
+                                                        el as any;
+                                            }
+                                        "
+                                        accept="image/*"
+                                        capture="environment"
+                                        class="hidden"
+                                        @change="handlePhotoCaptured"
+                                    />
+                                    <button
+                                        @click="handleCapturePhoto(log.id)"
+                                        class="bg-slate-850 flex items-center space-x-2 rounded-xl border border-slate-800 px-4 py-2.5 text-xs font-bold text-slate-200 transition-all hover:bg-slate-800 active:scale-95"
+                                    >
+                                        <svg
+                                            class="h-4 w-4 text-indigo-400"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                                            />
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="2"
+                                                d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                                            />
+                                        </svg>
+                                        <span>Capture Checkpoint Photo</span>
+                                    </button>
+                                    <span
+                                        v-if="checkpointPhoto"
+                                        class="flex items-center space-x-1 text-[10px] font-bold text-emerald-400"
+                                    >
+                                        <svg
+                                            class="h-3.5 w-3.5"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                stroke-width="3"
+                                                d="M5 13l4 4L19 7"
+                                            />
+                                        </svg>
+                                        <span>Photo Captured</span>
+                                    </span>
+                                </div>
+                                <div
+                                    v-if="checkpointPhoto"
+                                    class="aspect-video w-24 overflow-hidden rounded-lg border border-slate-800 bg-slate-950"
+                                >
+                                    <img
+                                        :src="checkpointPhoto"
+                                        class="h-full w-full object-cover"
+                                    />
+                                </div>
+                            </div>
+
+                            <!-- Dynamic Signature Canvas Box -->
+                            <div
+                                v-if="log.checkpoint.signature_required"
+                                class="space-y-2"
+                            >
+                                <label
+                                    class="block text-[10px] font-bold uppercase tracking-wider text-slate-400"
+                                    >Digital Sign-off</label
+                                >
+                                <div
+                                    class="border-slate-850 relative overflow-hidden rounded-xl border bg-slate-950"
+                                >
+                                    <canvas
+                                        :ref="
+                                            (el) => {
+                                                if (el)
+                                                    sigCanvasRefs[log.id] =
+                                                        el as any;
+                                            }
+                                        "
+                                        width="320"
+                                        height="120"
+                                        class="h-[120px] w-full cursor-crosshair touch-none bg-slate-950"
+                                    ></canvas>
+                                    <button
+                                        @click="
+                                            clearSignature(
+                                                sigCanvasRefs[log.id],
+                                            )
+                                        "
+                                        class="absolute bottom-2 right-2 rounded border border-slate-800 bg-slate-900/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 backdrop-blur"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Interactive Scan Buttons -->
+                            <div class="grid grid-cols-2 gap-3">
+                                <button
+                                    v-if="
+                                        log.checkpoint.scan_method === 'qr' ||
+                                        log.checkpoint.scan_method === 'both'
+                                    "
+                                    @click="startScan('qr')"
+                                    :disabled="currentLoadingId === log.id"
+                                    class="flex items-center justify-center space-x-2 rounded-xl bg-indigo-600 py-3.5 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-all hover:bg-indigo-500 active:scale-95"
+                                >
+                                    <svg
+                                        class="h-4 w-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
+                                        />
+                                    </svg>
+                                    <span>Scan QR Code</span>
+                                </button>
+
+                                <button
+                                    v-if="
+                                        log.checkpoint.scan_method === 'nfc' ||
+                                        log.checkpoint.scan_method === 'both'
+                                    "
+                                    @click="startScan('nfc')"
+                                    :disabled="currentLoadingId === log.id"
+                                    class="bg-violet-650 flex items-center justify-center space-x-2 rounded-xl py-3.5 text-xs font-bold uppercase tracking-wider text-white shadow-md transition-all hover:bg-violet-600 active:scale-95"
+                                    :class="
+                                        log.checkpoint.scan_method === 'nfc'
+                                            ? 'col-span-2'
+                                            : ''
+                                    "
+                                >
+                                    <svg
+                                        class="h-4 w-4"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2"
+                                            d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+                                        />
+                                    </svg>
+                                    <span>Scan NFC Tag</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- COMPLETE PATROL REPORT SCREEN (Visible when checklist complete) -->
+            <div
+                v-if="showCompletePanel"
+                class="animate-fadeIn space-y-4 rounded-3xl border border-emerald-500/20 bg-slate-900 bg-gradient-to-br from-slate-900 via-slate-900 to-emerald-950/20 p-5 shadow-xl"
+            >
+                <div class="flex items-center space-x-2 text-emerald-400">
+                    <svg
+                        class="h-5 w-5 animate-bounce"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                        />
+                    </svg>
+                    <h4 class="text-sm font-bold uppercase tracking-wider">
+                        Patrol Route Completed
+                    </h4>
+                </div>
+                <p class="text-xs leading-relaxed text-slate-400">
+                    All route checkpoints have been checked or skipped. Please
+                    sign off and submit the patrol report below.
+                </p>
+
+                <!-- General Shift Note -->
+                <div>
+                    <label
+                        class="mb-2 block text-[10px] font-bold uppercase tracking-wider text-slate-400"
+                        >General Patrol Notes</label
+                    >
+                    <textarea
+                        v-model="generalNote"
+                        rows="3"
+                        class="border-slate-850 w-full rounded-xl border bg-slate-950 p-2.5 text-xs text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        placeholder="Provide details about gates, security observations, shift occurrences..."
+                    ></textarea>
+                </div>
+
+                <!-- Complete Sign-off signature pad -->
+                <div class="space-y-2">
+                    <label
+                        class="block text-[10px] font-bold uppercase tracking-wider text-slate-400"
+                        >Guard Final Signature</label
+                    >
+                    <div
+                        class="border-slate-850 relative overflow-hidden rounded-xl border bg-slate-950"
+                    >
+                        <canvas
+                            ref="completionSigCanvasRef"
+                            width="320"
+                            height="130"
+                            class="h-[130px] w-full cursor-crosshair touch-none bg-slate-950"
+                        ></canvas>
+                        <button
+                            @click="clearSignature(completionSigCanvasRef)"
+                            class="absolute bottom-2 right-2 rounded border border-slate-800 bg-slate-900/80 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-400 backdrop-blur"
+                        >
+                            Clear
+                        </button>
+                    </div>
+                </div>
+
+                <div
+                    v-if="completionError"
+                    class="rounded-xl bg-rose-500/10 p-2.5 text-center text-xs font-medium text-rose-400"
+                >
+                    {{ completionError }}
+                </div>
+
+                <button
+                    @click="handleCompletePatrol"
+                    :disabled="completionLoading"
+                    class="hover:to-teal-850 active:scale-98 flex w-full items-center justify-center space-x-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-700 py-4 text-xs font-bold uppercase tracking-widest text-white shadow-xl shadow-emerald-600/20 transition-all hover:from-emerald-700"
+                >
+                    <span
+                        v-if="completionLoading"
+                        class="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"
+                    ></span>
+                    <span v-else>SUBMIT PATROL REPORT</span>
+                </button>
+            </div>
         </div>
 
-        <button 
-          @click="handleCompletePatrol"
-          :disabled="completionLoading"
-          class="w-full py-4 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-850 text-white font-bold rounded-2xl shadow-xl shadow-emerald-600/20 transition-all flex items-center justify-center space-x-2 text-xs uppercase tracking-widest active:scale-98"
+        <!-- SKIP REASON MODAL -->
+        <div
+            v-if="skipModalCheckpoint"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-6 backdrop-blur-sm"
         >
-          <span v-if="completionLoading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-          <span v-else>SUBMIT PATROL REPORT</span>
-        </button>
-      </div>
-    </div>
+            <div
+                class="animate-fadeIn w-full max-w-sm space-y-4 rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl"
+            >
+                <h4 class="text-sm font-bold text-slate-100">
+                    Skip Checkpoint: {{ skipModalCheckpoint.checkpoint.name }}
+                </h4>
+                <p class="text-xs text-slate-400">
+                    Please provide a valid security reason for skipping this
+                    checkpoint. This skip log will be recorded in the audit
+                    history.
+                </p>
 
-    <!-- SKIP REASON MODAL -->
-    <div 
-      v-if="skipModalCheckpoint" 
-      class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-6"
-    >
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 w-full max-w-sm space-y-4 shadow-2xl animate-fadeIn">
-        <h4 class="text-sm font-bold text-slate-100">Skip Checkpoint: {{ skipModalCheckpoint.checkpoint.name }}</h4>
-        <p class="text-xs text-slate-400">Please provide a valid security reason for skipping this checkpoint. This skip log will be recorded in the audit history.</p>
-        
-        <textarea 
-          v-model="skipReason"
-          rows="3"
-          class="w-full bg-slate-950 border border-slate-850 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-slate-100 p-2.5 rounded-xl text-xs focus:outline-none"
-          placeholder="E.g. Access blocked by cargo, gate keys missing, area locked by facility manager..."
-        ></textarea>
+                <textarea
+                    v-model="skipReason"
+                    rows="3"
+                    class="border-slate-850 w-full rounded-xl border bg-slate-950 p-2.5 text-xs text-slate-100 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                    placeholder="E.g. Access blocked by cargo, gate keys missing, area locked by facility manager..."
+                ></textarea>
 
-        <div class="flex space-x-3">
-          <button 
-            @click="skipModalCheckpoint = null; skipReason = ''"
-            class="flex-1 py-3 bg-slate-800 hover:bg-slate-750 text-slate-300 text-xs font-bold uppercase tracking-wider rounded-xl active:scale-95"
-          >
-            Cancel
-          </button>
-          <button 
-            @click="executeSkip"
-            :disabled="!skipReason.trim()"
-            class="flex-1 py-3 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-bold uppercase tracking-wider rounded-xl active:scale-95 shadow-lg shadow-amber-600/20"
-          >
-            Confirm Skip
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- SCAN OVERLAY / SCANNER SCREEN -->
-    <div 
-      v-if="showScanSimulator" 
-      class="fixed inset-0 z-50 bg-slate-950/95 flex flex-col justify-center items-center p-6"
-    >
-      <div v-if="simulatorMethod === 'qr'" class="w-full max-w-sm flex flex-col items-center space-y-6">
-        <h4 class="text-sm font-bold uppercase tracking-widest text-indigo-400"> Scan Checkpoint QR Code </h4>
-        <p class="text-xs text-slate-400 text-center">Place the QR code inside the frame to scan automatically.</p>
-        
-        <!-- Webcam reader target -->
-        <div id="qr-reader" class="w-64 h-64 rounded-3xl overflow-hidden border border-indigo-500/30 bg-black relative">
-          <!-- Frame border effect -->
-          <div class="absolute inset-4 border border-dashed border-indigo-500/40 rounded-2xl pointer-events-none z-10"></div>
+                <div class="flex space-x-3">
+                    <button
+                        @click="
+                            skipModalCheckpoint = null;
+                            skipReason = '';
+                        "
+                        class="hover:bg-slate-750 flex-1 rounded-xl bg-slate-800 py-3 text-xs font-bold uppercase tracking-wider text-slate-300 active:scale-95"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        @click="executeSkip"
+                        :disabled="!skipReason.trim()"
+                        class="flex-1 rounded-xl bg-amber-600 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-amber-600/20 hover:bg-amber-500 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+                    >
+                        Confirm Skip
+                    </button>
+                </div>
+            </div>
         </div>
 
-        <button 
-          @click="stopQrScanner(); showScanSimulator = false"
-          class="px-6 py-3 bg-slate-900 hover:bg-slate-850 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-800 active:scale-95"
+        <!-- SCAN OVERLAY / SCANNER SCREEN -->
+        <div
+            v-if="showScanSimulator"
+            class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/95 p-6"
         >
-          Cancel Scan
-        </button>
-      </div>
+            <div
+                v-if="simulatorMethod === 'qr'"
+                class="flex w-full max-w-sm flex-col items-center space-y-6"
+            >
+                <h4
+                    class="text-sm font-bold uppercase tracking-widest text-indigo-400"
+                >
+                    Scan Checkpoint QR Code
+                </h4>
+                <p class="text-center text-xs text-slate-400">
+                    Place the QR code inside the frame to scan automatically.
+                </p>
 
-      <div v-else class="w-full max-w-sm flex flex-col items-center space-y-6 text-center">
-        <!-- NFC icon/pulse -->
-        <div class="w-24 h-24 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center animate-pulse mb-4">
-          <svg class="w-12 h-12 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-          </svg>
+                <!-- Webcam reader target -->
+                <div
+                    id="qr-reader"
+                    class="relative h-64 w-64 overflow-hidden rounded-3xl border border-indigo-500/30 bg-black"
+                >
+                    <!-- Frame border effect -->
+                    <div
+                        class="pointer-events-none absolute inset-4 z-10 rounded-2xl border border-dashed border-indigo-500/40"
+                    ></div>
+                </div>
+
+                <button
+                    @click="
+                        stopQrScanner();
+                        showScanSimulator = false;
+                    "
+                    class="hover:bg-slate-850 rounded-xl border border-slate-800 bg-slate-900 px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-300 active:scale-95"
+                >
+                    Cancel Scan
+                </button>
+            </div>
+
+            <div
+                v-else
+                class="flex w-full max-w-sm flex-col items-center space-y-6 text-center"
+            >
+                <!-- NFC icon/pulse -->
+                <div
+                    class="mb-4 flex h-24 w-24 animate-pulse items-center justify-center rounded-full border border-indigo-500/20 bg-indigo-500/10"
+                >
+                    <svg
+                        class="h-12 w-12 text-indigo-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.5"
+                            d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"
+                        />
+                    </svg>
+                </div>
+
+                <h4
+                    class="text-sm font-bold uppercase tracking-widest text-indigo-400"
+                >
+                    NFC Tag Reader
+                </h4>
+                <p class="px-4 text-xs leading-relaxed text-slate-300">
+                    {{ nfcStatusMessage }}
+                </p>
+
+                <!-- Manual fallback input if Web NFC not supported -->
+                <div
+                    v-if="showNfcManualInput"
+                    class="w-full space-y-3 border-t border-slate-900 px-4 pt-4"
+                >
+                    <p
+                        class="text-[10px] font-bold uppercase tracking-wider text-slate-500"
+                    >
+                        Manual Fallback Code Entry
+                    </p>
+                    <input
+                        v-model="nfcManualCode"
+                        type="text"
+                        class="w-full rounded-xl border border-slate-800 bg-slate-900 p-3 text-center font-mono text-xs uppercase tracking-widest text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        placeholder="Type NFC code..."
+                    />
+                    <button
+                        @click="submitNfcManual(currentSigData)"
+                        :disabled="!nfcManualCode.trim()"
+                        class="w-full rounded-xl bg-indigo-600 py-3 text-xs font-bold uppercase tracking-wider text-white transition-all hover:bg-indigo-500 active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+                    >
+                        Submit Tag ID
+                    </button>
+                </div>
+
+                <button
+                    @click="
+                        cleanupNfc();
+                        showScanSimulator = false;
+                    "
+                    class="hover:bg-slate-850 rounded-xl border border-slate-800 bg-slate-900 px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-300 active:scale-95"
+                >
+                    Close Reader
+                </button>
+            </div>
         </div>
-        
-        <h4 class="text-sm font-bold uppercase tracking-widest text-indigo-400"> NFC Tag Reader </h4>
-        <p class="text-xs text-slate-300 px-4 leading-relaxed">{{ nfcStatusMessage }}</p>
-
-        <!-- Manual fallback input if Web NFC not supported -->
-        <div v-if="showNfcManualInput" class="w-full space-y-3 px-4 pt-4 border-t border-slate-900">
-          <p class="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Manual Fallback Code Entry</p>
-          <input 
-            v-model="nfcManualCode"
-            type="text"
-            class="w-full bg-slate-900 border border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-100 p-3 rounded-xl text-xs focus:outline-none text-center font-mono uppercase tracking-widest"
-            placeholder="Type NFC code..."
-          />
-          <button 
-            @click="submitNfcManual(currentSigData)"
-            :disabled="!nfcManualCode.trim()"
-            class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:pointer-events-none text-white font-bold text-xs uppercase tracking-wider rounded-xl active:scale-95 transition-all"
-          >
-            Submit Tag ID
-          </button>
-        </div>
-
-        <button 
-          @click="cleanupNfc(); showScanSimulator = false"
-          class="px-6 py-3 bg-slate-900 hover:bg-slate-850 text-slate-300 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-800 active:scale-95"
-        >
-          Close Reader
-        </button>
-      </div>
     </div>
-  </div>
 </template>
 
 <style scoped>
 .animate-scan {
-  animation: scan 2s linear infinite;
+    animation: scan 2s linear infinite;
 }
 @keyframes scan {
-  0% { top: 0%; }
-  50% { top: 100%; }
-  100% { top: 0%; }
+    0% {
+        top: 0%;
+    }
+    50% {
+        top: 100%;
+    }
+    100% {
+        top: 0%;
+    }
 }
 </style>

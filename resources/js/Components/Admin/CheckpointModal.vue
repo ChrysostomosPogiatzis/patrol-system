@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, nextTick, onUnmounted } from 'vue';
+import { nextTick, onUnmounted, ref, watch } from 'vue';
 
 interface Location {
     id: number;
@@ -47,13 +47,13 @@ const form = ref({
     nfc_tag_id: '',
     gps_required: true,
     gps_fence_radius: 15,
-    latitude: 34.671200,
-    longitude: 33.041200,
+    latitude: 34.6712,
+    longitude: 33.0412,
     photo_requirement: 'off',
     note_requirement: 'off',
     voice_requirement: 'off',
     signature_required: false,
-    incident_enabled: true
+    incident_enabled: true,
 });
 
 const mapContainer = ref<HTMLDivElement | null>(null);
@@ -81,11 +81,13 @@ function loadLeaflet(): Promise<void> {
 }
 
 const getSelectedLocationCoords = () => {
-    const loc = props.locations.find(l => l.id === Number(form.value.location_id));
+    const loc = props.locations.find(
+        (l) => l.id === Number(form.value.location_id),
+    );
     if (loc && loc.latitude && loc.longitude) {
         return {
             latitude: Number(loc.latitude),
-            longitude: Number(loc.longitude)
+            longitude: Number(loc.longitude),
         };
     }
     return null;
@@ -101,8 +103,8 @@ async function initMap() {
         mapInstance = null;
     }
 
-    let lat = Number(form.value.latitude) || 34.671200;
-    let lng = Number(form.value.longitude) || 33.041200;
+    let lat = Number(form.value.latitude) || 34.6712;
+    let lng = Number(form.value.longitude) || 33.0412;
 
     // Fallback to selected location coordinates if it is a new checkpoint and not yet overridden
     if (!props.checkpoint) {
@@ -117,17 +119,22 @@ async function initMap() {
 
     mapInstance = L.map(mapContainer.value).setView([lat, lng], 15);
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO'
-    }).addTo(mapInstance);
+    L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        {
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+        },
+    ).addTo(mapInstance);
 
-    markerInstance = L.marker([lat, lng], { draggable: true }).addTo(mapInstance);
+    markerInstance = L.marker([lat, lng], { draggable: true }).addTo(
+        mapInstance,
+    );
     circleInstance = L.circle([lat, lng], {
         color: '#818cf8',
         fillColor: '#818cf8',
         fillOpacity: 0.15,
         radius: form.value.gps_fence_radius,
-        weight: 1.5
+        weight: 1.5,
     }).addTo(mapInstance);
 
     // Drag release
@@ -163,71 +170,93 @@ function updateMapFromInputs() {
 }
 
 // Watch location_id change to center map on the new site coordinates
-watch(() => form.value.location_id, (newVal) => {
-    if (newVal) {
-        const coords = getSelectedLocationCoords();
-        if (coords) {
-            form.value.latitude = coords.latitude;
-            form.value.longitude = coords.longitude;
-            updateMapFromInputs();
+watch(
+    () => form.value.location_id,
+    (newVal) => {
+        if (newVal) {
+            const coords = getSelectedLocationCoords();
+            if (coords) {
+                form.value.latitude = coords.latitude;
+                form.value.longitude = coords.longitude;
+                updateMapFromInputs();
+            }
         }
-    }
-});
+    },
+);
 
 // Watch inputs to update map markers
-watch(() => [form.value.latitude, form.value.longitude, form.value.gps_fence_radius], () => {
-    updateMapFromInputs();
-});
+watch(
+    () => [
+        form.value.latitude,
+        form.value.longitude,
+        form.value.gps_fence_radius,
+    ],
+    () => {
+        updateMapFromInputs();
+    },
+);
 
-watch(() => props.show, (newVal) => {
-    if (newVal) {
-        if (props.checkpoint) {
-            form.value = {
-                location_id: props.checkpoint.location_id,
-                name: props.checkpoint.name,
-                description: props.checkpoint.description || '',
-                scan_method: props.checkpoint.scan_method,
-                qr_code: props.checkpoint.qr_code || '',
-                nfc_tag_id: props.checkpoint.nfc_tag_id || '',
-                gps_required: !!props.checkpoint.gps_required,
-                gps_fence_radius: Number(props.checkpoint.gps_fence_radius ?? 15),
-                latitude: props.checkpoint.latitude ? Number(props.checkpoint.latitude) : 34.671200,
-                longitude: props.checkpoint.longitude ? Number(props.checkpoint.longitude) : 33.041200,
-                photo_requirement: props.checkpoint.photo_requirement || 'off',
-                note_requirement: props.checkpoint.note_requirement || 'off',
-                voice_requirement: props.checkpoint.voice_requirement || 'off',
-                signature_required: !!props.checkpoint.signature_required,
-                incident_enabled: !!props.checkpoint.incident_enabled
-            };
+watch(
+    () => props.show,
+    (newVal) => {
+        if (newVal) {
+            if (props.checkpoint) {
+                form.value = {
+                    location_id: props.checkpoint.location_id,
+                    name: props.checkpoint.name,
+                    description: props.checkpoint.description || '',
+                    scan_method: props.checkpoint.scan_method,
+                    qr_code: props.checkpoint.qr_code || '',
+                    nfc_tag_id: props.checkpoint.nfc_tag_id || '',
+                    gps_required: !!props.checkpoint.gps_required,
+                    gps_fence_radius: Number(
+                        props.checkpoint.gps_fence_radius ?? 15,
+                    ),
+                    latitude: props.checkpoint.latitude
+                        ? Number(props.checkpoint.latitude)
+                        : 34.6712,
+                    longitude: props.checkpoint.longitude
+                        ? Number(props.checkpoint.longitude)
+                        : 33.0412,
+                    photo_requirement:
+                        props.checkpoint.photo_requirement || 'off',
+                    note_requirement:
+                        props.checkpoint.note_requirement || 'off',
+                    voice_requirement:
+                        props.checkpoint.voice_requirement || 'off',
+                    signature_required: !!props.checkpoint.signature_required,
+                    incident_enabled: !!props.checkpoint.incident_enabled,
+                };
+            } else {
+                form.value = {
+                    location_id: '',
+                    name: '',
+                    description: '',
+                    scan_method: 'qr',
+                    qr_code: '',
+                    nfc_tag_id: '',
+                    gps_required: true,
+                    gps_fence_radius: 15,
+                    latitude: 34.6712,
+                    longitude: 33.0412,
+                    photo_requirement: 'off',
+                    note_requirement: 'off',
+                    voice_requirement: 'off',
+                    signature_required: false,
+                    incident_enabled: true,
+                };
+            }
+            nextTick(() => {
+                setTimeout(initMap, 250);
+            });
         } else {
-            form.value = {
-                location_id: '',
-                name: '',
-                description: '',
-                scan_method: 'qr',
-                qr_code: '',
-                nfc_tag_id: '',
-                gps_required: true,
-                gps_fence_radius: 15,
-                latitude: 34.671200,
-                longitude: 33.041200,
-                photo_requirement: 'off',
-                note_requirement: 'off',
-                voice_requirement: 'off',
-                signature_required: false,
-                incident_enabled: true
-            };
+            if (mapInstance) {
+                mapInstance.remove();
+                mapInstance = null;
+            }
         }
-        nextTick(() => {
-            setTimeout(initMap, 250);
-        });
-    } else {
-        if (mapInstance) {
-            mapInstance.remove();
-            mapInstance = null;
-        }
-    }
-});
+    },
+);
 
 onUnmounted(() => {
     if (mapInstance) {
@@ -246,67 +275,108 @@ function handleSubmit() {
 </script>
 
 <template>
-    <div 
+    <div
         v-if="show"
-        class="fixed inset-0 z-50 bg-slate-955/80 backdrop-blur-sm flex items-center justify-center p-6 transition-all duration-300"
+        class="bg-slate-955/80 fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur-sm transition-all duration-300"
     >
-        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 w-full max-w-4xl space-y-4 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <div class="flex justify-between items-center pb-2 border-b border-slate-100 dark:border-slate-800">
-                <h4 class="text-sm font-black uppercase tracking-widest text-slate-800 dark:text-slate-100 font-mono">
+        <div
+            class="max-h-[90vh] w-full max-w-4xl space-y-4 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-900"
+        >
+            <div
+                class="flex items-center justify-between border-b border-slate-100 pb-2 dark:border-slate-800"
+            >
+                <h4
+                    class="font-mono text-sm font-black uppercase tracking-widest text-slate-800 dark:text-slate-100"
+                >
                     {{ checkpoint ? 'Edit Checkpoint' : 'Add New Checkpoint' }}
                 </h4>
-                <button @click="$emit('close')" class="text-slate-400 hover:text-slate-650 dark:hover:text-slate-200">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                <button
+                    @click="$emit('close')"
+                    class="hover:text-slate-650 text-slate-400 dark:hover:text-slate-200"
+                >
+                    <svg
+                        class="h-5 w-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12"
+                        />
                     </svg>
                 </button>
             </div>
 
             <!-- Two-Column Grid Setup -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs text-slate-700 dark:text-slate-300">
+            <div
+                class="grid grid-cols-1 gap-6 text-xs text-slate-700 lg:grid-cols-2 dark:text-slate-300"
+            >
                 <!-- Left Column: Checkpoint Details Form -->
                 <div class="space-y-4">
                     <!-- Site Location Selection -->
                     <div class="space-y-1">
-                        <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">Location Site *</label>
-                        <select 
-                            v-model="form.location_id" 
-                            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 p-3 rounded-xl text-slate-800 dark:text-slate-100 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-[44px]"
+                        <label
+                            class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                            >Location Site *</label
                         >
-                            <option value="">Select a registered location...</option>
-                            <option v-for="l in locations" :key="l.id" :value="l.id">{{ l.name }}</option>
+                        <select
+                            v-model="form.location_id"
+                            class="border-slate-250 min-h-[44px] w-full rounded-xl border bg-slate-50 p-3 text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                        >
+                            <option value="">
+                                Select a registered location...
+                            </option>
+                            <option
+                                v-for="l in locations"
+                                :key="l.id"
+                                :value="l.id"
+                            >
+                                {{ l.name }}
+                            </option>
                         </select>
                     </div>
 
                     <!-- Checkpoint Name & Description -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div class="space-y-1">
-                            <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">Checkpoint Name *</label>
-                            <input 
-                                v-model="form.name" 
-                                type="text" 
-                                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 p-3 rounded-xl text-slate-850 dark:text-slate-100 focus:border-indigo-500 focus:outline-none min-h-[44px]" 
-                                placeholder="e.g. Server Room Entrance" 
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >Checkpoint Name *</label
+                            >
+                            <input
+                                v-model="form.name"
+                                type="text"
+                                class="border-slate-250 text-slate-850 min-h-[44px] w-full rounded-xl border bg-slate-50 p-3 focus:border-indigo-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                                placeholder="e.g. Server Room Entrance"
                             />
                         </div>
                         <div class="space-y-1">
-                            <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">Description</label>
-                            <input 
-                                v-model="form.description" 
-                                type="text" 
-                                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 p-3 rounded-xl text-slate-850 dark:text-slate-100 focus:border-indigo-500 focus:outline-none min-h-[44px]" 
-                                placeholder="Verify locks, sensors, etc." 
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >Description</label
+                            >
+                            <input
+                                v-model="form.description"
+                                type="text"
+                                class="border-slate-250 text-slate-850 min-h-[44px] w-full rounded-xl border bg-slate-50 p-3 focus:border-indigo-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                                placeholder="Verify locks, sensors, etc."
                             />
                         </div>
                     </div>
 
                     <!-- Hardware Scanning Setup -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div class="space-y-1">
-                            <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">Scan Method</label>
-                            <select 
-                                v-model="form.scan_method" 
-                                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 p-3 rounded-xl text-slate-800 dark:text-slate-100 focus:border-indigo-500 focus:outline-none min-h-[44px]"
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >Scan Method</label
+                            >
+                            <select
+                                v-model="form.scan_method"
+                                class="border-slate-250 min-h-[44px] w-full rounded-xl border bg-slate-50 p-3 text-slate-800 focus:border-indigo-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
                             >
                                 <option value="qr">QR Code Only</option>
                                 <option value="nfc">NFC Tag Only</option>
@@ -314,55 +384,101 @@ function handleSubmit() {
                             </select>
                         </div>
                         <div class="space-y-1">
-                            <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">QR Value</label>
-                            <input 
-                                v-model="form.qr_code" 
-                                type="text" 
-                                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 p-3 rounded-xl text-slate-850 dark:text-slate-100 focus:border-indigo-500 focus:outline-none min-h-[44px]" 
-                                placeholder="Auto-gen if empty" 
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >QR Value</label
+                            >
+                            <input
+                                v-model="form.qr_code"
+                                type="text"
+                                class="border-slate-250 text-slate-850 min-h-[44px] w-full rounded-xl border bg-slate-50 p-3 focus:border-indigo-500 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                                placeholder="Auto-gen if empty"
                             />
                         </div>
                         <div class="space-y-1">
-                            <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">NFC Tag ID</label>
-                            <input 
-                                v-model="form.nfc_tag_id" 
-                                type="text" 
-                                class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-250 dark:border-slate-800 p-3 rounded-xl text-slate-850 dark:text-slate-100 focus:border-indigo-500 focus:outline-none min-h-[44px]" 
-                                placeholder="e.g. tag-109a" 
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >NFC Tag ID</label
+                            >
+                            <input
+                                v-model="form.nfc_tag_id"
+                                type="text"
+                                class="dark:bg-slate-955 border-slate-250 text-slate-850 min-h-[44px] w-full rounded-xl border bg-slate-50 p-3 focus:border-indigo-500 focus:outline-none dark:border-slate-800 dark:text-slate-100"
+                                placeholder="e.g. tag-109a"
                             />
                         </div>
                     </div>
 
                     <!-- GPS Coordinates Inputs -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-150 dark:border-slate-800">
+                    <div
+                        class="border-slate-150 grid grid-cols-1 gap-4 rounded-xl border bg-slate-50 p-4 md:grid-cols-3 dark:border-slate-800 dark:bg-slate-950/40"
+                    >
                         <div class="flex flex-col justify-center space-y-1.5">
-                            <span class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">GPS Verification</span>
-                            <label class="inline-flex items-center cursor-pointer min-h-[40px]">
-                                <input type="checkbox" v-model="form.gps_required" class="sr-only peer" />
-                                <div class="relative w-11 h-6 bg-slate-200 dark:bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-650"></div>
-                                <span class="ms-3 text-xs font-bold text-slate-650 dark:text-slate-300">Required</span>
+                            <span
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >GPS Verification</span
+                            >
+                            <label
+                                class="inline-flex min-h-[40px] cursor-pointer items-center"
+                            >
+                                <input
+                                    type="checkbox"
+                                    v-model="form.gps_required"
+                                    class="peer sr-only"
+                                />
+                                <div
+                                    class="peer-checked:bg-indigo-650 peer relative h-6 w-11 rounded-full bg-slate-200 after:absolute after:start-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none dark:bg-slate-800"
+                                ></div>
+                                <span
+                                    class="text-slate-650 ms-3 text-xs font-bold dark:text-slate-300"
+                                    >Required</span
+                                >
                             </label>
                         </div>
                         <div class="space-y-1">
-                            <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">Latitude</label>
-                            <input v-model.number="form.latitude" type="number" step="0.000001" class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none min-h-[40px]" />
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >Latitude</label
+                            >
+                            <input
+                                v-model.number="form.latitude"
+                                type="number"
+                                step="0.000001"
+                                class="dark:bg-slate-955 min-h-[40px] w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-800 focus:outline-none dark:border-slate-800 dark:text-slate-100"
+                            />
                         </div>
                         <div class="space-y-1">
-                            <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">Longitude</label>
-                            <input v-model.number="form.longitude" type="number" step="0.000001" class="w-full bg-slate-50 dark:bg-slate-955 border border-slate-200 dark:border-slate-800 p-2.5 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none min-h-[40px]" />
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >Longitude</label
+                            >
+                            <input
+                                v-model.number="form.longitude"
+                                type="number"
+                                step="0.000001"
+                                class="dark:bg-slate-955 min-h-[40px] w-full rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-800 focus:outline-none dark:border-slate-800 dark:text-slate-100"
+                            />
                         </div>
-                        <div v-if="form.gps_required" class="space-y-1 md:col-span-3 pt-2">
-                            <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">GPS Fence Radius (meters)</label>
+                        <div
+                            v-if="form.gps_required"
+                            class="space-y-1 pt-2 md:col-span-3"
+                        >
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >GPS Fence Radius (meters)</label
+                            >
                             <div class="flex items-center space-x-3">
-                                <input 
-                                    type="range" 
-                                    min="5" 
-                                    max="100" 
+                                <input
+                                    type="range"
+                                    min="5"
+                                    max="100"
                                     step="5"
-                                    v-model.number="form.gps_fence_radius" 
-                                    class="flex-1 accent-indigo-600 h-2 bg-slate-200 dark:bg-slate-850 rounded-lg appearance-none cursor-pointer" 
+                                    v-model.number="form.gps_fence_radius"
+                                    class="dark:bg-slate-850 h-2 flex-1 cursor-pointer appearance-none rounded-lg bg-slate-200 accent-indigo-600"
                                 />
-                                <span class="w-12 text-center font-mono font-bold text-indigo-500 dark:text-indigo-400 text-xs">
+                                <span
+                                    class="w-12 text-center font-mono text-xs font-bold text-indigo-500 dark:text-indigo-400"
+                                >
                                     {{ form.gps_fence_radius }}m
                                 </span>
                             </div>
@@ -370,26 +486,44 @@ function handleSubmit() {
                     </div>
 
                     <!-- Media requirements & switches -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div class="space-y-1">
-                            <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">Photo Required</label>
-                            <select v-model="form.photo_requirement" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 p-3 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none min-h-[44px]">
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >Photo Required</label
+                            >
+                            <select
+                                v-model="form.photo_requirement"
+                                class="border-slate-250 min-h-[44px] w-full rounded-xl border bg-slate-50 p-3 text-slate-800 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                            >
                                 <option value="off">Off</option>
                                 <option value="optional">Optional</option>
                                 <option value="required">Required</option>
                             </select>
                         </div>
                         <div class="space-y-1">
-                            <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">Note Required</label>
-                            <select v-model="form.note_requirement" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 p-3 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none min-h-[44px]">
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >Note Required</label
+                            >
+                            <select
+                                v-model="form.note_requirement"
+                                class="border-slate-250 min-h-[44px] w-full rounded-xl border bg-slate-50 p-3 text-slate-800 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                            >
                                 <option value="off">Off</option>
                                 <option value="optional">Optional</option>
                                 <option value="required">Required</option>
                             </select>
                         </div>
                         <div class="space-y-1">
-                            <label class="block text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-widest font-black">Voice Required</label>
-                            <select v-model="form.voice_requirement" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 p-3 rounded-xl text-slate-800 dark:text-slate-100 focus:outline-none min-h-[44px]">
+                            <label
+                                class="block text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500"
+                                >Voice Required</label
+                            >
+                            <select
+                                v-model="form.voice_requirement"
+                                class="border-slate-250 min-h-[44px] w-full rounded-xl border bg-slate-50 p-3 text-slate-800 focus:outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+                            >
                                 <option value="off">Off</option>
                                 <option value="optional">Optional</option>
                                 <option value="required">Required</option>
@@ -399,41 +533,69 @@ function handleSubmit() {
 
                     <!-- Toggle options -->
                     <div class="grid grid-cols-2 gap-4">
-                        <label class="flex items-center p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-150 dark:border-slate-800 rounded-xl cursor-pointer min-h-[44px]">
-                            <input type="checkbox" v-model="form.signature_required" class="accent-indigo-650 w-4 h-4 rounded" />
-                            <span class="ms-3 text-xs font-bold text-slate-650 dark:text-slate-300">Requires Signature</span>
+                        <label
+                            class="border-slate-150 flex min-h-[44px] cursor-pointer items-center rounded-xl border bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40"
+                        >
+                            <input
+                                type="checkbox"
+                                v-model="form.signature_required"
+                                class="accent-indigo-650 h-4 w-4 rounded"
+                            />
+                            <span
+                                class="text-slate-650 ms-3 text-xs font-bold dark:text-slate-300"
+                                >Requires Signature</span
+                            >
                         </label>
-                        <label class="flex items-center p-3 bg-slate-50 dark:bg-slate-950/40 border border-slate-150 dark:border-slate-800 rounded-xl cursor-pointer min-h-[44px]">
-                            <input type="checkbox" v-model="form.incident_enabled" class="accent-indigo-650 w-4 h-4 rounded" />
-                            <span class="ms-3 text-xs font-bold text-slate-650 dark:text-slate-300">Allow Incident Reports</span>
+                        <label
+                            class="border-slate-150 flex min-h-[44px] cursor-pointer items-center rounded-xl border bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950/40"
+                        >
+                            <input
+                                type="checkbox"
+                                v-model="form.incident_enabled"
+                                class="accent-indigo-650 h-4 w-4 rounded"
+                            />
+                            <span
+                                class="text-slate-650 ms-3 text-xs font-bold dark:text-slate-300"
+                                >Allow Incident Reports</span
+                            >
                         </label>
                     </div>
                 </div>
 
                 <!-- Right Column: Checkpoint Map selector -->
-                <div class="flex flex-col h-full justify-between">
+                <div class="flex h-full flex-col justify-between">
                     <div class="space-y-2">
-                        <label class="block text-[10px] text-slate-450 dark:text-slate-500 uppercase tracking-widest font-black">Select Checkpoint Location on Map</label>
-                        <div 
-                            ref="mapContainer" 
-                            class="w-full h-[360px] rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 overflow-hidden z-10"
+                        <label
+                            class="text-slate-450 block text-[10px] font-black uppercase tracking-widest dark:text-slate-500"
+                            >Select Checkpoint Location on Map</label
+                        >
+                        <div
+                            ref="mapContainer"
+                            class="z-10 h-[360px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-slate-800"
                         ></div>
-                        <p class="text-[10px] text-slate-450 dark:text-slate-550 font-medium">Click on the map or drag the pin to set the exact coordinates of the checkpoint.</p>
+                        <p
+                            class="text-slate-450 dark:text-slate-550 text-[10px] font-medium"
+                        >
+                            Click on the map or drag the pin to set the exact
+                            coordinates of the checkpoint.
+                        </p>
                     </div>
                 </div>
             </div>
 
             <!-- Footer Actions -->
-            <div class="flex space-x-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <button 
-                    @click="$emit('close')" 
-                    class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 text-xs font-black uppercase tracking-wider rounded-xl transition-all min-h-[48px]"
+            <div
+                class="flex space-x-3 border-t border-slate-100 pt-4 dark:border-slate-800"
+            >
+                <button
+                    @click="$emit('close')"
+                    class="dark:hover:bg-slate-750 min-h-[48px] flex-1 rounded-xl bg-slate-100 py-3 text-xs font-black uppercase tracking-wider text-slate-700 transition-all hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
                 >
                     Cancel
                 </button>
-                <button 
-                    @click="handleSubmit" 
-                    class="flex-1 py-3 bg-gradient-to-r from-indigo-500 to-purple-650 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md transition-all active:scale-95 min-h-[48px]"
+                <button
+                    @click="handleSubmit"
+                    class="to-purple-650 min-h-[48px] flex-1 rounded-xl bg-gradient-to-r from-indigo-500 py-3 text-xs font-black uppercase tracking-wider text-white shadow-md transition-all hover:from-indigo-600 hover:to-purple-700 active:scale-95"
                 >
                     {{ checkpoint ? 'Save Changes' : 'Create Checkpoint' }}
                 </button>

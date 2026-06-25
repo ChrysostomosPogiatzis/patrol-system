@@ -36,17 +36,23 @@ export class CapacitorBridge {
         if (this.isNative()) {
             try {
                 // Call Capacitor native Geolocation plugin
-                const position = await window.Capacitor.Plugins.Geolocation.getCurrentPosition({
-                    enableHighAccuracy: true,
-                    timeout: 10000,
-                });
+                const position =
+                    await window.Capacitor.Plugins.Geolocation.getCurrentPosition(
+                        {
+                            enableHighAccuracy: true,
+                            timeout: 10000,
+                        },
+                    );
                 return {
                     latitude: position.coords.latitude,
                     longitude: position.coords.longitude,
                     accuracy: position.coords.accuracy,
                 };
             } catch (error) {
-                console.error("Capacitor Geolocation failed, using web fallback.", error);
+                console.error(
+                    'Capacitor Geolocation failed, using web fallback.',
+                    error,
+                );
             }
         }
 
@@ -62,7 +68,10 @@ export class CapacitorBridge {
                         });
                     },
                     (error) => {
-                        console.warn("Web Geolocation failed. Using simulated coordinates.", error);
+                        console.warn(
+                            'Web Geolocation failed. Using simulated coordinates.',
+                            error,
+                        );
                         // Default mock coordinates (witbo HQ Cyprus)
                         resolve({
                             latitude: 35.123456,
@@ -70,7 +79,7 @@ export class CapacitorBridge {
                             accuracy: 10,
                         });
                     },
-                    { enableHighAccuracy: true, timeout: 5000 }
+                    { enableHighAccuracy: true, timeout: 5000 },
                 );
             } else {
                 resolve({
@@ -88,13 +97,17 @@ export class CapacitorBridge {
     public static async getBatteryInfo(): Promise<BatteryInfo> {
         if (this.isNative()) {
             try {
-                const info = await window.Capacitor.Plugins.Device.getBatteryInfo();
+                const info =
+                    await window.Capacitor.Plugins.Device.getBatteryInfo();
                 return {
                     level: Math.round(info.batteryLevel * 100),
                     isCharging: info.isCharging,
                 };
             } catch (error) {
-                console.error("Capacitor Battery check failed, using web fallback.", error);
+                console.error(
+                    'Capacitor Battery check failed, using web fallback.',
+                    error,
+                );
             }
         }
 
@@ -125,7 +138,7 @@ export class CapacitorBridge {
             // Native flows would request camera permissions and start barcode scanner:
             // const result = await window.Capacitor.Plugins.BarcodeScanner.startScan();
             // return result.content;
-            return expectedCode; 
+            return expectedCode;
         }
 
         // Web Simulator: simulate scanning delay
