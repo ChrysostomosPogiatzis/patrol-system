@@ -4,7 +4,7 @@ import { useOfflineSync } from '@/Composables/useOfflineSync';
 import { CapacitorBridge } from '@/Services/CapacitorBridge';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import axios from 'axios';
-import { onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface Checkpoint {
     id: number;
@@ -50,7 +50,8 @@ const emit = defineEmits<{
     (e: 'checkpoint-skipped'): void;
 }>();
 
-const { isOnline, addToQueue } = useOfflineSync();
+const { isOnline, addToQueue, queue, isSyncing, triggerSync } =
+    useOfflineSync();
 const { updateLocation, currentPosition } = useGeolocation();
 
 // Active states
@@ -1050,6 +1051,113 @@ function calculateDistanceMetres(
     return R * c; // in metres
 }
 
+function calculateBearing(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+): number {
+    const phi1 = (lat1 * Math.PI) / 180;
+    const phi2 = (lat2 * Math.PI) / 180;
+    const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+    const y = Math.sin(deltaLambda) * Math.cos(phi2);
+    const x =
+        Math.cos(phi1) * Math.sin(phi2) -
+        Math.sin(phi1) * Math.cos(phi2) * Math.cos(deltaLambda);
+
+    const bearing = (Math.atan2(y, x) * 180) / Math.PI;
+    return (bearing + 360) % 360;
+}
+
+function getBearingDirection(bearing: number): string {
+    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const index = Math.round(bearing / 45) % 8;
+    return directions[index];
+}
+
+const targetDistanceAndBearing = computed(() => {
+    const activeLog = getActiveLog();
+    if (!activeLog || !currentPosition.value) return null;
+
+    const cp = activeLog.checkpoint;
+    if (
+        cp.latitude === undefined ||
+        cp.longitude === undefined ||
+        cp.latitude === null ||
+        cp.longitude === null
+    ) {
+        return null;
+    }
+
+    const dist = calculateDistanceMetres(
+        currentPosition.value.latitude,
+        currentPosition.value.longitude,
+        Number(cp.latitude),
+        Number(cp.longitude),
+    );
+
+    const bear = calculateBearing(
+        currentPosition.value.latitude,
+        currentPosition.value.longitude,
+        Number(cp.latitude),
+        Number(cp.longitude),
+    );
+
+    return {
+        distance: Math.round(dist),
+        bearing: bear,
+        direction: getBearingDirection(bear),
+    };
+});
+
+const paceAndEta = computed(() => {
+    if (!props.activePatrol || !logs.value || logs.value.length === 0)
+        return null;
+
+    const scannedLogs = logs.value
+        .filter((l) => l.status === 'scanned' && l.scanned_at)
+        .sort(
+            (a, b) =>
+                new Date(a.scanned_at!).getTime() -
+                new Date(b.scanned_at!).getTime(),
+        );
+
+    let avgPaceSeconds = 300; // default 5 minutes
+    if (scannedLogs.length >= 2) {
+        let totalDiff = 0;
+        for (let i = 1; i < scannedLogs.length; i++) {
+            const t1 = new Date(scannedLogs[i - 1].scanned_at!).getTime();
+            const t2 = new Date(scannedLogs[i].scanned_at!).getTime();
+            totalDiff += (t2 - t1) / 1000;
+        }
+        avgPaceSeconds = totalDiff / (scannedLogs.length - 1);
+    }
+
+    const remainingCount = logs.value.filter(
+        (l) => l.status === 'pending',
+    ).length;
+    const remainingTimeSeconds = remainingCount * avgPaceSeconds;
+
+    const paceMin = Math.floor(avgPaceSeconds / 60);
+    const paceSec = Math.round(avgPaceSeconds % 60);
+    const paceStr = paceMin > 0 ? `${paceMin}m ${paceSec}s` : `${paceSec}s`;
+
+    let etaStr = 'N/A';
+    if (remainingCount === 0) {
+        etaStr = 'Finished';
+    } else {
+        const etaMin = Math.ceil(remainingTimeSeconds / 60);
+        etaStr = `~${etaMin} min`;
+    }
+
+    return {
+        pace: paceStr,
+        eta: etaStr,
+        remainingCount,
+    };
+});
+
 // Scan processing with real code verification
 async function executeScan(
     method: 'qr' | 'nfc',
@@ -1501,6 +1609,103 @@ onUnmounted(() => {
                 </div>
             </div>
 
+            <!-- Unified Patrol Stats & Offline Sync Dashboard -->
+            <div class="grid grid-cols-2 gap-3">
+                <!-- Pace and ETA Widget -->
+                <div
+                    v-if="paceAndEta"
+                    class="border-slate-850 flex flex-col justify-between space-y-2 rounded-2xl border bg-slate-900/60 p-3.5"
+                >
+                    <span
+                        class="text-[9px] font-black uppercase tracking-widest text-slate-500"
+                        >Patrol Progress Pace</span
+                    >
+                    <div class="flex items-baseline space-x-1.5">
+                        <span class="text-base font-black text-slate-100">{{
+                            paceAndEta.eta
+                        }}</span>
+                        <span class="text-[10px] text-slate-500"
+                            >remaining</span
+                        >
+                    </div>
+                    <div
+                        class="flex items-center justify-between text-[10px] text-slate-400"
+                    >
+                        <span
+                            >Avg Pace:
+                            <span class="font-mono font-bold text-indigo-400">{{
+                                paceAndEta.pace
+                            }}</span></span
+                        >
+                        <span
+                            >Pending:
+                            <span class="font-mono font-bold text-indigo-400">{{
+                                paceAndEta.remainingCount
+                            }}</span></span
+                        >
+                    </div>
+                </div>
+
+                <!-- Offline Sync Widget -->
+                <div
+                    class="border-slate-850 flex flex-col justify-between space-y-2 rounded-2xl border bg-slate-900/60 p-3.5"
+                >
+                    <div class="flex items-center justify-between">
+                        <span
+                            class="text-[9px] font-black uppercase tracking-widest text-slate-500"
+                            >Sync Status</span
+                        >
+                        <!-- Connection badge -->
+                        <span
+                            class="flex items-center space-x-1 rounded-full px-2 py-0.5 text-[9px] font-bold"
+                            :class="
+                                isOnline
+                                    ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+                                    : 'border border-amber-500/20 bg-amber-500/10 text-amber-400'
+                            "
+                        >
+                            <span
+                                class="h-1.5 w-1.5 rounded-full"
+                                :class="
+                                    isOnline ? 'bg-emerald-500' : 'bg-amber-500'
+                                "
+                            ></span>
+                            <span>{{ isOnline ? 'Online' : 'Offline' }}</span>
+                        </span>
+                    </div>
+
+                    <div class="flex items-baseline space-x-1.5">
+                        <span class="text-base font-black text-slate-100">{{
+                            queue.length
+                        }}</span>
+                        <span class="text-[10px] text-slate-500"
+                            >pending sync</span
+                        >
+                    </div>
+
+                    <!-- Sync trigger button -->
+                    <button
+                        v-if="queue.length > 0 && isOnline"
+                        @click="triggerSync"
+                        :disabled="isSyncing"
+                        class="flex items-center justify-center space-x-1.5 rounded-xl bg-indigo-600 px-3 py-1.5 text-[10px] font-bold text-white shadow transition-all hover:bg-indigo-500 active:scale-95 disabled:opacity-50"
+                    >
+                        <div
+                            v-if="isSyncing"
+                            class="h-3 w-3 animate-spin rounded-full border border-white/30 border-t-white"
+                        ></div>
+                        <span>{{ isSyncing ? 'Syncing...' : 'Sync Now' }}</span>
+                    </button>
+                    <div v-else class="text-[9px] italic text-slate-500">
+                        {{
+                            queue.length > 0
+                                ? 'Will sync when online'
+                                : 'All data synced'
+                        }}
+                    </div>
+                </div>
+            </div>
+
             <!-- CHECKPOINT STEP LOG LIST -->
             <div class="space-y-3">
                 <div class="flex items-center justify-between pl-1">
@@ -1763,6 +1968,70 @@ onUnmounted(() => {
                                         log.checkpoint.voice_requirement.toUpperCase()
                                     }}
                                 </span>
+                            </div>
+
+                            <!-- Live Proximity Compass & Distance -->
+                            <div
+                                v-if="targetDistanceAndBearing"
+                                class="flex items-center space-x-3 rounded-xl border border-indigo-500/10 bg-indigo-500/5 p-3 text-xs"
+                            >
+                                <div
+                                    class="relative flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-400"
+                                >
+                                    <svg
+                                        class="h-4 w-4 transition-transform duration-300"
+                                        :style="{
+                                            transform: `rotate(${targetDistanceAndBearing.bearing}deg)`,
+                                        }"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="3"
+                                            d="M12 19V5m0 0l-7 7m7-7l7 7"
+                                        />
+                                    </svg>
+                                </div>
+                                <div class="flex-grow">
+                                    <div
+                                        class="flex items-center justify-between"
+                                    >
+                                        <span class="font-bold text-slate-200"
+                                            >Next Checkpoint Proximity</span
+                                        >
+                                        <span
+                                            class="font-mono text-sm font-black text-indigo-400"
+                                        >
+                                            {{
+                                                targetDistanceAndBearing.distance
+                                            }}m
+                                        </span>
+                                    </div>
+                                    <div
+                                        class="mt-0.5 flex items-center justify-between text-[10px] text-slate-500"
+                                    >
+                                        <span
+                                            >Bearing:
+                                            {{
+                                                targetDistanceAndBearing.direction
+                                            }}
+                                            ({{
+                                                Math.round(
+                                                    targetDistanceAndBearing.bearing,
+                                                )
+                                            }}°)</span
+                                        >
+                                        <span v-if="log.checkpoint.gps_required"
+                                            >Required Zone:
+                                            {{
+                                                log.checkpoint.gps_fence_radius
+                                            }}m</span
+                                        >
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Optional Note Input -->
