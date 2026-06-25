@@ -1172,7 +1172,11 @@ function getPriorityClass(priority: string) {
                                             :key="m.id"
                                             class="rounded-lg border border-slate-200 bg-slate-50 p-2"
                                         >
-                                            <audio :src="m.file_url" controls class="h-8 w-full max-w-xs text-xs"></audio>
+                                            <audio
+                                                :src="m.file_url"
+                                                controls
+                                                class="h-8 w-full max-w-xs text-xs"
+                                            ></audio>
                                         </div>
                                     </div>
                                 </div>

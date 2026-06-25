@@ -36,7 +36,16 @@ class AdminDashboardController extends Controller
         ];
 
         $activePatrols = Patrol::where('status', 'in_progress')
-            ->with(['securityGuard', 'route', 'tenant', 'checkpointLogs.checkpoint', 'checkpointLogs.media'])
+            ->with([
+                'securityGuard',
+                'route',
+                'tenant',
+                'checkpointLogs.checkpoint',
+                'checkpointLogs.media',
+                'locationPings' => function ($q) {
+                    $q->orderBy('id', 'desc');
+                }
+            ])
             ->orderBy('started_at', 'desc')
             ->get();
 

@@ -71,6 +71,11 @@ interface Patrol {
     incident_count: number;
     route?: Route;
     security_guard?: Guard;
+    location_pings?: Array<{
+        latitude: number | string;
+        longitude: number | string;
+        battery_pct?: number;
+    }>;
 }
 
 interface Incident {
@@ -393,8 +398,45 @@ onMounted(() => {
     }, 5000);
 });
 
+// SOS Alarm Audio Chime
+let sosAudio: HTMLAudioElement | null = null;
+
+watch(
+    activeSos,
+    (newSos) => {
+        if (newSos && newSos.length > 0) {
+            if (!sosAudio) {
+                sosAudio = new Audio(
+                    'https://assets.mixkit.co/active_storage/sfx/2869/2869-200.wav',
+                );
+                sosAudio.loop = true;
+            }
+            if (sosAudio.paused) {
+                sosAudio
+                    .play()
+                    .catch((err) =>
+                        console.log(
+                            'Audio playback blocked until user interacts:',
+                            err,
+                        ),
+                    );
+            }
+        } else {
+            if (sosAudio) {
+                sosAudio.pause();
+                sosAudio = null;
+            }
+        }
+    },
+    { deep: true },
+);
+
 onUnmounted(() => {
     if (refreshInterval) clearInterval(refreshInterval);
+    if (sosAudio) {
+        sosAudio.pause();
+        sosAudio = null;
+    }
 });
 
 // Watch tab switches to fetch relevant lists
@@ -794,6 +836,7 @@ watch(activeTab, (newTab) => {
                                             class="flex items-center justify-between text-[10px] text-slate-400"
                                         >
                                             <span
+                                                class="flex items-center gap-1.5"
                                                 >Guard:
                                                 <strong
                                                     class="text-slate-300"
@@ -801,8 +844,42 @@ watch(activeTab, (newTab) => {
                                                         patrol.security_guard
                                                             ?.full_name
                                                     }}</strong
-                                                ></span
-                                            >
+                                                >
+                                                <span
+                                                    v-if="
+                                                        patrol.location_pings &&
+                                                        patrol.location_pings
+                                                            .length > 0 &&
+                                                        patrol.location_pings[0]
+                                                            .battery_pct !==
+                                                            undefined
+                                                    "
+                                                    class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-mono text-[9px] font-bold"
+                                                    :class="[
+                                                        patrol.location_pings[0]
+                                                            .battery_pct > 50
+                                                            ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-400'
+                                                            : '',
+                                                        patrol.location_pings[0]
+                                                            .battery_pct <=
+                                                            50 &&
+                                                        patrol.location_pings[0]
+                                                            .battery_pct > 20
+                                                            ? 'border border-amber-500/20 bg-amber-500/10 text-amber-400'
+                                                            : '',
+                                                        patrol.location_pings[0]
+                                                            .battery_pct <= 20
+                                                            ? 'animate-pulse border border-rose-500/20 bg-rose-500/10 text-rose-400'
+                                                            : '',
+                                                    ]"
+                                                >
+                                                    🔋
+                                                    {{
+                                                        patrol.location_pings[0]
+                                                            .battery_pct
+                                                    }}%
+                                                </span>
+                                            </span>
                                             <span
                                                 class="font-mono font-semibold text-indigo-300"
                                                 >{{

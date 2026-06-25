@@ -20,6 +20,11 @@ interface Patrol {
     completed_checkpoints: number;
     route?: Route;
     security_guard?: Guard;
+    location_pings?: Array<{
+        latitude: number | string;
+        longitude: number | string;
+        battery_pct?: number;
+    }>;
 }
 
 defineProps<{
@@ -151,11 +156,34 @@ function formatTime(timeStr: string) {
                 <div
                     class="flex items-center justify-between text-[10px] text-slate-500"
                 >
-                    <span class="font-medium">
+                    <span class="flex items-center gap-1.5 font-medium">
                         Guard:
                         <strong class="text-slate-700">{{
                             patrol.security_guard?.full_name
                         }}</strong>
+                        <span
+                            v-if="
+                                patrol.location_pings &&
+                                patrol.location_pings.length > 0 &&
+                                patrol.location_pings[0].battery_pct !==
+                                    undefined
+                            "
+                            class="py-0.2 inline-flex items-center gap-0.5 rounded px-1 font-mono text-[9px] font-bold"
+                            :class="[
+                                patrol.location_pings[0].battery_pct > 50
+                                    ? 'bg-emerald-50 text-emerald-600'
+                                    : '',
+                                patrol.location_pings[0].battery_pct <= 50 &&
+                                patrol.location_pings[0].battery_pct > 20
+                                    ? 'bg-amber-50 text-amber-600'
+                                    : '',
+                                patrol.location_pings[0].battery_pct <= 20
+                                    ? 'animate-pulse bg-rose-50 text-rose-600'
+                                    : '',
+                            ]"
+                        >
+                            🔋 {{ patrol.location_pings[0].battery_pct }}%
+                        </span>
                     </span>
                     <span class="font-mono font-bold text-indigo-600">
                         {{ patrol.completed_checkpoints }}/{{
@@ -309,8 +337,7 @@ function formatTime(timeStr: string) {
                                     <div class="flex flex-wrap gap-2">
                                         <a
                                             v-for="m in log.media.filter(
-                                                (m: any) =>
-                                                    m.kind === 'photo',
+                                                (m: any) => m.kind === 'photo',
                                             )"
                                             :key="m.id"
                                             :href="m.file_url"
@@ -348,7 +375,11 @@ function formatTime(timeStr: string) {
                                             :key="m.id"
                                             class="rounded-lg border border-slate-200 bg-slate-50 p-2"
                                         >
-                                            <audio :src="m.file_url" controls class="h-8 w-full max-w-xs text-xs"></audio>
+                                            <audio
+                                                :src="m.file_url"
+                                                controls
+                                                class="h-8 w-full max-w-xs text-xs"
+                                            ></audio>
                                         </div>
                                     </div>
                                 </div>

@@ -514,7 +514,15 @@ onMounted(() => loadHistory(1));
                                 </div>
 
                                 <!-- Photos -->
-                                <div v-if="log.media && log.media.filter(x => x.kind === 'photo').length > 0" class="mt-2">
+                                <div
+                                    v-if="
+                                        log.media &&
+                                        log.media.filter(
+                                            (x) => x.kind === 'photo',
+                                        ).length > 0
+                                    "
+                                    class="mt-2"
+                                >
                                     <p
                                         class="mb-2 text-[9px] font-bold uppercase tracking-widest text-slate-500"
                                     >
@@ -534,21 +542,47 @@ onMounted(() => loadHistory(1));
                                 </div>
 
                                 <!-- Voice Memos -->
-                                <div v-if="log.media && log.media.filter(x => x.kind === 'voice_memo').length > 0" class="mt-2">
+                                <div
+                                    v-if="
+                                        log.media &&
+                                        log.media.filter(
+                                            (x) => x.kind === 'voice_memo',
+                                        ).length > 0
+                                    "
+                                    class="mt-2"
+                                >
                                     <p
                                         class="mb-2 text-[9px] font-bold uppercase tracking-widest text-slate-500"
                                     >
                                         Voice Memos
                                     </p>
                                     <div class="space-y-1.5">
-                                        <div v-for="m in log.media.filter(x => x.kind === 'voice_memo')" :key="m.id" class="rounded-xl border border-slate-800 bg-slate-900/60 p-2">
-                                            <audio :src="m.file_url" controls class="h-8 w-full max-w-xs text-xs"></audio>
+                                        <div
+                                            v-for="m in log.media.filter(
+                                                (x) => x.kind === 'voice_memo',
+                                            )"
+                                            :key="m.id"
+                                            class="rounded-xl border border-slate-800 bg-slate-900/60 p-2"
+                                        >
+                                            <audio
+                                                :src="m.file_url"
+                                                controls
+                                                class="h-8 w-full max-w-xs text-xs"
+                                            ></audio>
                                         </div>
                                     </div>
                                 </div>
 
                                 <!-- Signatures -->
-                                <div v-if="log.media && log.media.filter(x => x.kind === 'signature').length > 0" class="mt-2">
+                                <div
+                                    v-if="
+                                        log.media &&
+                                        log.media.filter(
+                                            (x) => x.kind === 'signature',
+                                        ).length > 0
+                                    "
+                                    class="mt-2"
+                                >
                                     <p
                                         class="mb-2 text-[9px] font-bold uppercase tracking-widest text-slate-500"
                                     >

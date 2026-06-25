@@ -40,6 +40,7 @@ const props = defineProps<{
     locations: Location[];
     guardLocations: GuardLocationPing[];
     guardPings24h: GuardLocationPing[];
+    activePatrols?: any[];
 }>();
 
 const mapContainer = ref<HTMLDivElement | null>(null);
@@ -347,11 +348,56 @@ function renderLayers() {
             });
         }
     }
+
+    // 4. Draw Trails for all Active Patrol Shifts
+    if (props.activePatrols && props.activePatrols.length > 0) {
+        props.activePatrols.forEach((patrol) => {
+            const pings = patrol.location_pings || [];
+            if (pings.length > 1) {
+                // Backend returns pings sorted desc, reverse to draw chronological line
+                const sortedPings = [...pings].reverse();
+                const coordinates = sortedPings.map((p) => [
+                    Number(p.latitude),
+                    Number(p.longitude),
+                ]);
+
+                // Draw a beautiful thin dashed line representing the guard's path during this active shift
+                L.polyline(coordinates, {
+                    color: '#6366f1', // Indigo 500
+                    weight: 2.5,
+                    opacity: 0.6,
+                    dashArray: '4, 6',
+                }).addTo(polylineLayerGroup);
+
+                // Draw tiny dot markers along the breadcrumb trail to show individual pings
+                sortedPings.forEach((p, idx) => {
+                    // Only draw intermediate points (not the latest one which has the main guard marker)
+                    if (idx < sortedPings.length - 1) {
+                        L.circleMarker(
+                            [Number(p.latitude), Number(p.longitude)],
+                            {
+                                radius: 3,
+                                color: '#818cf8', // Indigo 400
+                                fillColor: '#ffffff',
+                                fillOpacity: 1,
+                                weight: 1.5,
+                            },
+                        ).addTo(polylineLayerGroup);
+                    }
+                });
+            }
+        });
+    }
 }
 
-// Watch locations or guard pings updates
+// Watch locations, active patrols or guard pings updates
 watch(
-    () => [props.locations, props.guardLocations, props.guardPings24h],
+    () => [
+        props.locations,
+        props.guardLocations,
+        props.guardPings24h,
+        props.activePatrols,
+    ],
     () => {
         renderLayers();
     },

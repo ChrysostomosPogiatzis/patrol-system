@@ -2,7 +2,7 @@
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import { Head } from '@inertiajs/vue3';
 import axios from 'axios';
-import { onMounted, onUnmounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
 
 // Component Imports
 import GuardLocations from '@/Components/Admin/GuardLocations.vue';
@@ -106,6 +106,39 @@ function openResolveModal(type: 'incident' | 'sos', id: number) {
     showResolveModal.value = type;
 }
 
+// SOS Alarm Audio Chime
+let sosAudio: HTMLAudioElement | null = null;
+
+watch(
+    activeSos,
+    (newSos) => {
+        if (newSos && newSos.length > 0) {
+            if (!sosAudio) {
+                sosAudio = new Audio(
+                    'https://assets.mixkit.co/active_storage/sfx/2869/2869-200.wav',
+                );
+                sosAudio.loop = true;
+            }
+            if (sosAudio.paused) {
+                sosAudio
+                    .play()
+                    .catch((err) =>
+                        console.log(
+                            'Audio playback blocked until user interacts:',
+                            err,
+                        ),
+                    );
+            }
+        } else {
+            if (sosAudio) {
+                sosAudio.pause();
+                sosAudio = null;
+            }
+        }
+    },
+    { deep: true },
+);
+
 onMounted(() => {
     fetchOverview();
     // 5-second polling for real-time dispatch updates
@@ -114,6 +147,10 @@ onMounted(() => {
 
 onUnmounted(() => {
     if (refreshInterval) clearInterval(refreshInterval);
+    if (sosAudio) {
+        sosAudio.pause();
+        sosAudio = null;
+    }
 });
 </script>
 
@@ -275,6 +312,7 @@ onUnmounted(() => {
                 :locations="locations"
                 :guard-locations="guardLocations"
                 :guard-pings-24h="guardPings24h"
+                :active-patrols="activePatrols"
             />
         </div>
 
