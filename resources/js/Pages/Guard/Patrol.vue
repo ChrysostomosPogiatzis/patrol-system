@@ -1076,6 +1076,149 @@ function getBearingDirection(bearing: number): string {
     return directions[index];
 }
 
+function navigateToCheckpoint(log: CheckpointLog) {
+    const cp = log.checkpoint;
+    if (
+        cp.latitude === undefined ||
+        cp.longitude === undefined ||
+        cp.latitude === null ||
+        cp.longitude === null
+    ) {
+        alert('Coordinates are not defined for this checkpoint.');
+        return;
+    }
+    const lat = cp.latitude;
+    const lon = cp.longitude;
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`;
+    window.open(url, '_blank');
+}
+
+const showNavigationModal = ref(false);
+const navMapContainer = ref<HTMLDivElement | null>(null);
+let navMapInstance: any = null;
+let navMarkersLayer: any = null;
+let navPolylineLayer: any = null;
+
+function openNavigationModal(log: CheckpointLog) {
+    showNavigationModal.value = true;
+    setTimeout(() => {
+        initNavigationMap(log);
+    }, 150);
+}
+
+function closeNavigationModal() {
+    if (navMapInstance) {
+        navMapInstance.remove();
+        navMapInstance = null;
+    }
+    showNavigationModal.value = false;
+}
+
+function initNavigationMap(log: CheckpointLog) {
+    if (!navMapContainer.value) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    const cp = log.checkpoint;
+    if (
+        !cp ||
+        cp.latitude === undefined ||
+        cp.longitude === undefined ||
+        cp.latitude === null ||
+        cp.longitude === null
+    )
+        return;
+
+    const cpLat = Number(cp.latitude);
+    const cpLon = Number(cp.longitude);
+
+    let centerLat = cpLat;
+    let centerLon = cpLon;
+
+    if (currentPosition.value) {
+        centerLat = (currentPosition.value.latitude + cpLat) / 2;
+        centerLon = (currentPosition.value.longitude + cpLon) / 2;
+    }
+
+    navMapInstance = L.map(navMapContainer.value, {
+        center: [centerLat, centerLon],
+        zoom: 16,
+        zoomControl: true,
+    });
+
+    L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        {
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 20,
+        },
+    ).addTo(navMapInstance);
+
+    navMarkersLayer = L.layerGroup().addTo(navMapInstance);
+    navPolylineLayer = L.layerGroup().addTo(navMapInstance);
+
+    // Checkpoint
+    const cpCircle = L.circleMarker([cpLat, cpLon], {
+        radius: 10,
+        fillColor: '#6366F1',
+        color: '#FFFFFF',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.9,
+    }).bindPopup(`<div class="font-sans text-xs font-bold">${cp.name}</div>`);
+    navMarkersLayer.addLayer(cpCircle);
+
+    // Guard
+    if (currentPosition.value) {
+        const guardLat = currentPosition.value.latitude;
+        const guardLon = currentPosition.value.longitude;
+
+        const guardCircle = L.circleMarker([guardLat, guardLon], {
+            radius: 8,
+            fillColor: '#3B82F6',
+            color: '#FFFFFF',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 1,
+        }).bindPopup(
+            '<div class="font-sans text-xs font-bold">Your Location</div>',
+        );
+
+        const pulseCircle = L.circle([guardLat, guardLon], {
+            radius: 20,
+            fillColor: '#3B82F6',
+            color: '#3B82F6',
+            weight: 1,
+            opacity: 0.4,
+            fillOpacity: 0.15,
+        });
+
+        navMarkersLayer.addLayer(pulseCircle);
+        navMarkersLayer.addLayer(guardCircle);
+
+        const line = L.polyline(
+            [
+                [guardLat, guardLon],
+                [cpLat, cpLon],
+            ],
+            {
+                color: '#6366F1',
+                weight: 3,
+                dashArray: '6, 10',
+                opacity: 0.8,
+            },
+        );
+        navPolylineLayer.addLayer(line);
+
+        const bounds = L.latLngBounds([
+            [guardLat, guardLon],
+            [cpLat, cpLon],
+        ]);
+        navMapInstance.fitBounds(bounds, { padding: [40, 40] });
+    }
+}
+
 const targetDistanceAndBearing = computed(() => {
     const activeLog = getActiveLog();
     if (!activeLog || !currentPosition.value) return null;
@@ -1892,9 +2035,22 @@ onUnmounted(() => {
                                         />
                                     </svg>
                                 </span>
+                                <!-- Directions Button -->
+                                <button
+                                    v-if="
+                                        log.status === 'pending' &&
+                                        !isCheckpointLocked(log) &&
+                                        log.checkpoint.latitude &&
+                                        log.checkpoint.longitude
+                                    "
+                                    @click="openNavigationModal(log)"
+                                    class="mr-1 rounded-lg border border-indigo-500/25 bg-indigo-500/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-400 hover:text-indigo-300 active:scale-95"
+                                >
+                                    Directions
+                                </button>
                                 <!-- Skip Button -->
                                 <button
-                                    v-else-if="
+                                    v-if="
                                         log.status === 'pending' &&
                                         routeDetails?.allow_skip
                                     "
@@ -2551,6 +2707,114 @@ onUnmounted(() => {
                     class="hover:bg-slate-850 rounded-xl border border-slate-800 bg-slate-900 px-6 py-3 text-xs font-bold uppercase tracking-wider text-slate-300 active:scale-95"
                 >
                     Close Reader
+                </button>
+            </div>
+        </div>
+
+        <!-- Fullscreen Navigation Directions Modal -->
+        <div
+            v-if="showNavigationModal"
+            class="animate-fadeIn fixed inset-0 z-50 flex flex-col bg-slate-950 text-slate-100"
+        >
+            <!-- Modal Header -->
+            <div
+                class="flex items-center justify-between border-b border-slate-900 bg-slate-900/60 p-4"
+            >
+                <div>
+                    <span
+                        class="text-[9px] font-black uppercase tracking-widest text-indigo-400"
+                        >Checkpoint Navigation</span
+                    >
+                    <h3 class="text-sm font-bold text-slate-100">
+                        {{
+                            getActiveLog()?.checkpoint.name ||
+                            'Target Checkpoint'
+                        }}
+                    </h3>
+                </div>
+                <button
+                    @click="closeNavigationModal"
+                    class="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 text-sm font-bold text-slate-300 transition-all hover:bg-slate-700 active:scale-90"
+                >
+                    ✕
+                </button>
+            </div>
+
+            <!-- Compass & Distance banner -->
+            <div
+                v-if="targetDistanceAndBearing"
+                class="flex items-center justify-between border-b border-indigo-500/10 bg-indigo-500/10 p-4"
+            >
+                <div class="flex items-center space-x-3">
+                    <div
+                        class="relative flex h-12 w-12 items-center justify-center rounded-full bg-indigo-500/20 text-indigo-400"
+                    >
+                        <svg
+                            class="h-6 w-6 transition-transform duration-300"
+                            :style="{
+                                transform: `rotate(${targetDistanceAndBearing.bearing}deg)`,
+                            }"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="3"
+                                d="M12 19V5m0 0l-7 7m7-7l7 7"
+                            />
+                        </svg>
+                    </div>
+                    <div>
+                        <p
+                            class="text-[10px] font-bold uppercase tracking-wider text-slate-500"
+                        >
+                            Estimated Distance
+                        </p>
+                        <p class="font-mono text-xl font-black text-indigo-400">
+                            {{ targetDistanceAndBearing.distance }}m
+                        </p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p
+                        class="text-[10px] font-bold uppercase tracking-wider text-slate-500"
+                    >
+                        Compass Direction
+                    </p>
+                    <p class="text-sm font-black text-slate-200">
+                        {{ targetDistanceAndBearing.direction }} ({{
+                            Math.round(targetDistanceAndBearing.bearing)
+                        }}°)
+                    </p>
+                </div>
+            </div>
+
+            <!-- Fullscreen Map Div -->
+            <div class="relative flex-grow">
+                <div
+                    ref="navMapContainer"
+                    class="absolute inset-0 bg-slate-950"
+                ></div>
+            </div>
+
+            <!-- Action buttons footer -->
+            <div
+                class="flex gap-3 border-t border-slate-900 bg-slate-900/60 p-4"
+            >
+                <button
+                    @click="closeNavigationModal"
+                    class="flex-1 rounded-xl bg-slate-800 py-3 text-center text-xs font-bold uppercase tracking-wider text-slate-200 shadow transition-all hover:bg-slate-700 active:scale-95"
+                >
+                    Back to Checklist
+                </button>
+                <button
+                    v-if="getActiveLog()?.checkpoint"
+                    @click="navigateToCheckpoint(getActiveLog()!)"
+                    class="flex-1 rounded-xl bg-indigo-600 py-3 text-center text-xs font-bold uppercase tracking-wider text-white shadow transition-all hover:bg-indigo-500 active:scale-95"
+                >
+                    Open Google Maps
                 </button>
             </div>
         </div>
