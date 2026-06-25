@@ -297,20 +297,20 @@ function formatTime(timeStr: string) {
                                     v-if="
                                         log.media &&
                                         log.media.filter(
-                                            (m: any) => m.kind !== 'signature',
+                                            (m: any) => m.kind === 'photo',
                                         ).length > 0
                                     "
                                     class="space-y-1.5"
                                 >
                                     <span
                                         class="block font-mono text-[8px] font-black uppercase text-slate-400"
-                                        >Attached Evidence</span
+                                        >Attached Photos</span
                                     >
                                     <div class="flex flex-wrap gap-2">
                                         <a
                                             v-for="m in log.media.filter(
                                                 (m: any) =>
-                                                    m.kind !== 'signature',
+                                                    m.kind === 'photo',
                                             )"
                                             :key="m.id"
                                             :href="m.file_url"
@@ -322,6 +322,34 @@ function formatTime(timeStr: string) {
                                                 class="h-full w-full object-cover"
                                             />
                                         </a>
+                                    </div>
+                                </div>
+
+                                <!-- Attached Voice Memos -->
+                                <div
+                                    v-if="
+                                        log.media &&
+                                        log.media.filter(
+                                            (m: any) => m.kind === 'voice_memo',
+                                        ).length > 0
+                                    "
+                                    class="space-y-1.5"
+                                >
+                                    <span
+                                        class="block font-mono text-[8px] font-black uppercase text-slate-400"
+                                        >Voice Memos</span
+                                    >
+                                    <div class="space-y-1.5">
+                                        <div
+                                            v-for="m in log.media.filter(
+                                                (m: any) =>
+                                                    m.kind === 'voice_memo',
+                                            )"
+                                            :key="m.id"
+                                            class="rounded-lg border border-slate-200 bg-slate-50 p-2"
+                                        >
+                                            <audio :src="m.file_url" controls class="h-8 w-full max-w-xs text-xs"></audio>
+                                        </div>
                                     </div>
                                 </div>
 
