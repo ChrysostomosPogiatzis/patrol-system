@@ -140,66 +140,48 @@ onUnmounted(() => {
                 <div
                     v-for="sos in activeSos"
                     :key="sos.id"
-                    class="flex items-center justify-between rounded-xl border border-red-200/80 bg-white p-4 shadow-sm transition-colors hover:border-red-400"
+                    class="flex flex-col gap-3 rounded-xl border border-red-200/80 bg-white p-4 shadow-sm transition-colors hover:border-red-400"
                 >
-                    <div class="space-y-0.5">
-                        <span
-                            class="text-slate-850 block font-mono text-xs font-black"
-                        >
-                            {{ sos.security_guard?.full_name }}
+                    <div class="flex items-center justify-between">
+                        <div class="space-y-0.5">
                             <span
-                                v-if="sos.tenant"
-                                class="ml-1.5 rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-red-600"
+                                class="text-slate-850 block font-mono text-xs font-black"
                             >
-                                {{ sos.tenant.name }}
+                                {{ sos.security_guard?.full_name }}
+                                <span
+                                    v-if="sos.tenant"
+                                    class="ml-1.5 rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-red-600"
+                                >
+                                    {{ sos.tenant.name }}
+                                </span>
                             </span>
-                        </span>
-                        <span
-                            class="text-slate-450 block font-mono text-[9px] font-bold uppercase"
-                            >Time:
-                            {{
-                                new Date(sos.triggered_at).toLocaleTimeString()
-                            }}</span
-                        >
-                        <div
-                            class="mt-1 flex items-center space-x-1.5 text-[9px] font-bold text-red-700"
-                        >
-                            <svg
-                                class="text-red-650 h-3 w-3"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
+                            <span
+                                class="text-slate-450 block font-mono text-[9px] font-bold uppercase"
+                                >Time:
+                                {{
+                                    new Date(
+                                        sos.triggered_at,
+                                    ).toLocaleTimeString()
+                                }}</span
                             >
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                                />
-                                <path
-                                    stroke-linecap="round"
-                                    stroke-linejoin="round"
-                                    stroke-width="2"
-                                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                                />
-                            </svg>
-                            <a
-                                :href="`https://www.google.com/maps/search/?api=1&query=${sos.triggered_latitude},${sos.triggered_longitude}`"
-                                target="_blank"
-                                class="underline hover:text-red-800"
-                            >
-                                GPS:
-                                {{ Number(sos.triggered_latitude).toFixed(6) }},
-                                {{ Number(sos.triggered_longitude).toFixed(6) }}
-                            </a>
                         </div>
+                        <button
+                            @click="openResolveModal('sos', sos.id)"
+                            class="rounded-xl bg-red-600 px-3.5 py-2 text-[9px] font-black uppercase tracking-widest text-white transition-all hover:scale-105 hover:bg-red-500 active:scale-95"
+                        >
+                            Resolve
+                        </button>
                     </div>
-                    <button
-                        @click="openResolveModal('sos', sos.id)"
-                        class="rounded-xl bg-red-600 px-3.5 py-2 text-[9px] font-black uppercase tracking-widest text-white transition-all hover:scale-105 hover:bg-red-500 active:scale-95"
-                    >
-                        Resolve
-                    </button>
+
+                    <!-- Minimap Iframe -->
+                    <iframe
+                        class="h-[120px] w-full rounded-lg border border-red-200/50"
+                        :src="`https://maps.google.com/maps?q=${sos.triggered_latitude},${sos.triggered_longitude}&t=&z=16&ie=UTF8&iwloc=&output=embed`"
+                        frameborder="0"
+                        scrolling="no"
+                        marginheight="0"
+                        marginwidth="0"
+                    ></iframe>
                 </div>
             </div>
         </div>

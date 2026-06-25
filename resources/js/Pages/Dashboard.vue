@@ -495,77 +495,53 @@ watch(activeTab, (newTab) => {
                         <div
                             v-for="sos in activeSos"
                             :key="sos.id"
-                            class="flex items-center space-x-4 rounded-2xl border border-rose-500/30 bg-slate-900 p-3"
+                            class="flex flex-col gap-3 rounded-2xl border border-rose-500/30 bg-slate-900 p-4"
                         >
-                            <div class="text-left">
-                                <span
-                                    class="block font-mono text-[10px] font-bold uppercase tracking-widest text-rose-400"
-                                    >GUARD ID:
-                                    {{ sos.security_guard?.employee_id }}</span
-                                >
-                                <span
-                                    class="block text-xs font-bold text-slate-200"
-                                    >{{ sos.security_guard?.full_name }}</span
-                                >
-                                <span
-                                    class="mt-0.5 block font-mono text-[10px] text-slate-500"
-                                    >Triggered:
-                                    {{
-                                        new Date(
-                                            sos.triggered_at,
-                                        ).toLocaleTimeString()
-                                    }}</span
-                                >
-                                <div
-                                    class="mt-1 flex items-center space-x-1.5 text-[9px] font-bold text-rose-400"
-                                >
-                                    <svg
-                                        class="h-3 w-3 animate-pulse text-rose-500"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            stroke-width="2.5"
-                                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-                                        />
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            stroke-width="2.5"
-                                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-                                        />
-                                    </svg>
-                                    <a
-                                        :href="`https://www.google.com/maps/search/?api=1&query=${sos.triggered_latitude},${sos.triggered_longitude}`"
-                                        target="_blank"
-                                        class="underline hover:text-rose-300"
-                                    >
-                                        GPS:
+                            <div class="flex items-center justify-between">
+                                <div class="text-left">
+                                    <span
+                                        class="block font-mono text-[10px] font-bold uppercase tracking-widest text-rose-400"
+                                        >GUARD ID:
                                         {{
-                                            Number(
-                                                sos.triggered_latitude,
-                                            ).toFixed(6)
-                                        }},
+                                            sos.security_guard?.employee_id
+                                        }}</span
+                                    >
+                                    <span
+                                        class="block text-xs font-bold text-slate-200"
+                                        >{{
+                                            sos.security_guard?.full_name
+                                        }}</span
+                                    >
+                                    <span
+                                        class="mt-0.5 block font-mono text-[10px] text-slate-500"
+                                        >Triggered:
                                         {{
-                                            Number(
-                                                sos.triggered_longitude,
-                                            ).toFixed(6)
-                                        }}
-                                    </a>
+                                            new Date(
+                                                sos.triggered_at,
+                                            ).toLocaleTimeString()
+                                        }}</span
+                                    >
                                 </div>
+                                <button
+                                    @click="
+                                        resolveTargetId = sos.id;
+                                        showResolveModal = 'sos';
+                                    "
+                                    class="rounded-xl bg-rose-600 px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider text-white shadow-md shadow-rose-600/10 transition-all hover:bg-rose-500 active:scale-95"
+                                >
+                                    Acknowledge
+                                </button>
                             </div>
-                            <button
-                                @click="
-                                    resolveTargetId = sos.id;
-                                    showResolveModal = 'sos';
-                                "
-                                class="rounded-xl bg-rose-600 px-3.5 py-2 text-[10px] font-bold uppercase tracking-wider text-white shadow-md shadow-rose-600/10 transition-all hover:bg-rose-500 active:scale-95"
-                            >
-                                Acknowledge
-                            </button>
+
+                            <!-- Minimap Iframe -->
+                            <iframe
+                                class="h-[120px] w-full rounded-lg border border-rose-500/20"
+                                :src="`https://maps.google.com/maps?q=${sos.triggered_latitude},${sos.triggered_longitude}&t=&z=16&ie=UTF8&iwloc=&output=embed`"
+                                frameborder="0"
+                                scrolling="no"
+                                marginheight="0"
+                                marginwidth="0"
+                            ></iframe>
                         </div>
                     </div>
                 </div>
