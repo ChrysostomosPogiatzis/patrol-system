@@ -90,6 +90,9 @@ class PatrolController extends Controller
                       ->with(['checkpoint', 'media']);
                 },
                 'incidents:id,patrol_id,title,description,priority,status,created_at,incident_latitude,incident_longitude',
+                'sosAlerts' => function ($q) {
+                    $q->orderBy('triggered_at');
+                },
             ])
             ->firstOrFail();
 

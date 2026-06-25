@@ -69,7 +69,9 @@ async function startRecording() {
         }, 1000);
     } catch (err) {
         console.error('Microphone access denied or failed:', err);
-        alert('Could not access microphone. Please check permissions.');
+        alert(
+            'Could not access microphone. Please ensure microphone permissions are granted in settings/browser, and the site is accessed via secure HTTPS.',
+        );
     }
 }
 

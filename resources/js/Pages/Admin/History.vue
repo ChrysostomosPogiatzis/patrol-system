@@ -35,6 +35,26 @@ interface Incident {
     }>;
 }
 
+interface SosAlert {
+    id: number;
+    status: 'active' | 'acknowledged' | 'resolved' | 'false_alarm';
+    triggered_latitude?: number | string;
+    triggered_longitude?: number | string;
+    note?: string;
+    resolution_note?: string;
+    triggered_at: string;
+    acknowledged_at?: string;
+    resolved_at?: string;
+    security_guard?: Guard;
+    resolver?: { name: string };
+    acknowledger?: { name: string };
+    patrol?: {
+        id: number;
+        started_at: string;
+        route?: Route;
+    };
+}
+
 interface CheckpointLog {
     id: number;
     status: 'pending' | 'scanned' | 'skipped' | 'out_of_order_attempt';
@@ -82,13 +102,14 @@ interface Patrol {
 
 const patrols = ref<Patrol[]>([]);
 const incidents = ref<Incident[]>([]);
+const sosAlerts = ref<SosAlert[]>([]);
 const guards = ref<Guard[]>([]);
 
 // Filter states
 const selectedGuard = ref<string>('');
 const selectedTimeframe = ref<string>('7_days');
 const searchQuery = ref<string>('');
-const activeTab = ref<'patrols' | 'incidents'>('patrols');
+const activeTab = ref<'patrols' | 'incidents' | 'sos'>('patrols');
 const isLoading = ref<boolean>(false);
 
 // Detail Modal state
@@ -250,6 +271,7 @@ async function fetchHistory() {
         });
         patrols.value = response.data.patrols || [];
         incidents.value = response.data.incidents || [];
+        sosAlerts.value = response.data.sos_alerts || [];
         guards.value = response.data.guards || [];
     } catch (e) {
         console.error('Failed to load history data:', e);
@@ -390,6 +412,17 @@ function getPriorityClass(priority: string) {
             >
                 ⚠️ All Incidents Log ({{ incidents.length }})
             </button>
+            <button
+                @click="activeTab = 'sos'"
+                class="border-b-2 px-5 py-3 font-mono text-xs font-black uppercase tracking-wider transition-all"
+                :class="
+                    activeTab === 'sos'
+                        ? 'border-indigo-650 text-indigo-650'
+                        : 'border-transparent text-slate-400 hover:text-slate-600'
+                "
+            >
+                🚨 Emergency SOS Log ({{ sosAlerts.length }})
+            </button>
         </div>
 
         <!-- LOADING INDICATOR -->
@@ -424,6 +457,16 @@ function getPriorityClass(priority: string) {
                 class="font-mono text-xs font-bold uppercase tracking-widest text-slate-400"
             >
                 No incidents recorded in this timeframe.
+            </p>
+        </div>
+        <div
+            v-else-if="activeTab === 'sos' && sosAlerts.length === 0"
+            class="rounded-3xl border border-slate-200/80 bg-white p-12 py-16 text-center"
+        >
+            <p
+                class="font-mono text-xs font-bold uppercase tracking-widest text-slate-400"
+            >
+                No emergency SOS alarms logged in this timeframe.
             </p>
         </div>
 
@@ -636,9 +679,7 @@ function getPriorityClass(priority: string) {
                     </div>
                 </div>
             </template>
-
-            <!-- STANDALONE INCIDENTS LOG VIEW -->
-            <template v-else>
+            <template v-else-if="activeTab === 'incidents'">
                 <div
                     v-for="inc in incidents"
                     :key="inc.id"
@@ -758,6 +799,154 @@ function getPriorityClass(priority: string) {
                             >Resolved At:
                             {{ formatDate(inc.resolved_at!) }}</span
                         >
+                    </div>
+                </div>
+            </template>
+
+            <!-- STANDALONE SOS ALERTS LOG VIEW -->
+            <template v-else-if="activeTab === 'sos'">
+                <div
+                    v-for="sos in sosAlerts"
+                    :key="sos.id"
+                    class="space-y-4 rounded-2xl border border-slate-200/85 bg-white p-5 shadow-sm transition-colors hover:border-slate-300"
+                >
+                    <!-- Header -->
+                    <div
+                        class="flex flex-col justify-between gap-2 border-b border-slate-100 pb-3 sm:flex-row sm:items-center"
+                    >
+                        <div class="space-y-0.5">
+                            <div class="flex items-center gap-2">
+                                <span
+                                    class="text-xs font-black uppercase tracking-wide text-slate-800"
+                                >
+                                    Emergency SOS Alarm #{{ sos.id }}
+                                </span>
+                                <span
+                                    class="rounded-full border px-1.5 py-0.5 font-mono text-[8px] font-black uppercase tracking-wider"
+                                    :class="[
+                                        sos.status === 'active'
+                                            ? 'border-rose-200 bg-rose-50 text-rose-600'
+                                            : '',
+                                        sos.status === 'resolved'
+                                            ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                                            : '',
+                                        sos.status === 'acknowledged'
+                                            ? 'border-amber-200 bg-amber-50 text-amber-600'
+                                            : '',
+                                        sos.status === 'false_alarm'
+                                            ? 'border-slate-200 bg-slate-50 text-slate-600'
+                                            : '',
+                                    ]"
+                                >
+                                    {{ sos.status.replace('_', ' ') }}
+                                </span>
+                            </div>
+                            <div
+                                class="text-slate-450 flex items-center space-x-2 font-mono text-[10px] font-bold"
+                            >
+                                <span
+                                    >Guard:
+                                    {{
+                                        sos.security_guard?.full_name ||
+                                        'Deleted Guard'
+                                    }}
+                                    ({{
+                                        sos.security_guard?.employee_id ||
+                                        'N/A'
+                                    }})</span
+                                >
+                                <span>•</span>
+                                <span
+                                    >Triggered:
+                                    {{ formatDate(sos.triggered_at) }}</span
+                                >
+                            </div>
+                        </div>
+                        <div
+                            v-if="
+                                sos.triggered_latitude &&
+                                sos.triggered_longitude
+                            "
+                            class="flex items-center gap-2"
+                        >
+                            <span
+                                class="font-mono text-[10px] font-bold text-slate-400"
+                            >
+                                GPS:
+                                {{ Number(sos.triggered_latitude).toFixed(6) }},
+                                {{ Number(sos.triggered_longitude).toFixed(6) }}
+                            </span>
+                            <a
+                                :href="`https://www.google.com/maps/search/?api=1&query=${sos.triggered_latitude},${sos.triggered_longitude}`"
+                                target="_blank"
+                                class="rounded-xl border border-indigo-200 bg-indigo-50/50 px-3 py-1.5 font-mono text-[9px] font-black uppercase tracking-widest text-indigo-600 hover:bg-indigo-50"
+                            >
+                                Map Link
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Details & Resolution -->
+                    <div class="text-slate-650 space-y-3 text-xs">
+                        <div
+                            v-if="sos.patrol"
+                            class="flex items-center gap-1 font-mono text-[10px] text-slate-500"
+                        >
+                            <span>Associated Shift:</span>
+                            <span class="font-bold text-slate-700">
+                                {{ sos.patrol.route?.name || 'Manual Patrol' }}
+                                (Started:
+                                {{ formatDate(sos.patrol.started_at) }})
+                            </span>
+                        </div>
+
+                        <!-- Map View (using Google Maps Embed) -->
+                        <div
+                            v-if="
+                                sos.triggered_latitude &&
+                                sos.triggered_longitude
+                            "
+                            class="h-44 w-full overflow-hidden rounded-xl border border-slate-200"
+                        >
+                            <iframe
+                                width="100%"
+                                height="100%"
+                                frameborder="0"
+                                style="border: 0"
+                                :src="`https://maps.google.com/maps?q=${sos.triggered_latitude},${sos.triggered_longitude}&z=16&output=embed`"
+                                allowfullscreen
+                            ></iframe>
+                        </div>
+
+                        <!-- Resolution Notes -->
+                        <div
+                            v-if="
+                                sos.status === 'resolved' || sos.resolution_note
+                            "
+                            class="border-emerald-150/40 space-y-1 rounded-xl border bg-emerald-50/30 p-3.5 text-xs text-emerald-950"
+                        >
+                            <span
+                                class="block font-mono text-[9px] font-black uppercase tracking-wider text-emerald-700"
+                            >
+                                Resolution details
+                            </span>
+                            <p class="italic text-slate-600">
+                                {{
+                                    sos.resolution_note ||
+                                    'Resolved by Administrator.'
+                                }}
+                            </p>
+                            <div
+                                class="mt-1.5 flex flex-wrap gap-x-2 text-[8px] font-black uppercase text-slate-400"
+                            >
+                                <span v-if="sos.resolver"
+                                    >Resolved By: {{ sos.resolver.name }}</span
+                                >
+                                <span v-if="sos.resolved_at"
+                                    >At: {{ formatDate(sos.resolved_at) }}</span
+                                >
+                            </div>
+                        </div>
                     </div>
                 </div>
             </template>

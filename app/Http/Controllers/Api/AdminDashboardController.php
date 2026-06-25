@@ -701,13 +701,26 @@ class AdminDashboardController extends Controller
         }
         $incidents = $incidentQuery->get();
 
+        // SOS Alerts Query
+        $sosQuery = SosAlert::with(['securityGuard', 'patrol', 'resolver', 'acknowledger'])
+            ->orderBy('triggered_at', 'desc');
+
+        if ($guardId) {
+            $sosQuery->where('guard_id', $guardId);
+        }
+        if ($startDate) {
+            $sosQuery->whereBetween('triggered_at', [$startDate, $endDate]);
+        }
+        $sosAlerts = $sosQuery->get();
+
         // Guards for selector
         $guards = Guard::orderBy('full_name')->get();
 
         return response()->json([
             'patrols' => $patrols,
             'incidents' => $incidents,
-            'guards' => $guards
+            'guards' => $guards,
+            'sos_alerts' => $sosAlerts
         ]);
     }
 

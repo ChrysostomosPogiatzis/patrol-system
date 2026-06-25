@@ -40,6 +40,15 @@ interface PatrolDetail extends PatrolSummary {
         description: string;
         reported_at: string;
     }[];
+    sos_alerts?: {
+        id: number;
+        status: string;
+        triggered_latitude?: number;
+        triggered_longitude?: number;
+        triggered_at: string;
+        resolution_note?: string;
+        resolved_at?: string;
+    }[];
     completion_signature_url?: string;
     completion_latitude?: number;
     completion_longitude?: number;
@@ -562,6 +571,74 @@ onMounted(() => loadHistory(1));
                                 >
                                     {{ inc.description }}
                                 </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SOS Alerts -->
+                    <div
+                        v-if="
+                            selectedPatrol.sos_alerts &&
+                            selectedPatrol.sos_alerts.length > 0
+                        "
+                        class="mt-4"
+                    >
+                        <h3
+                            class="mb-2 pl-1 text-[10px] font-black uppercase tracking-widest text-rose-500"
+                        >
+                            🚨 Emergency SOS Alerts
+                        </h3>
+                        <div class="space-y-2">
+                            <div
+                                v-for="sos in selectedPatrol.sos_alerts"
+                                :key="sos.id"
+                                class="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3"
+                            >
+                                <div
+                                    class="mb-1 flex items-center justify-between"
+                                >
+                                    <span
+                                        class="rounded-full border border-rose-500/30 bg-rose-500/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-rose-400"
+                                    >
+                                        {{ sos.status.replace('_', ' ') }}
+                                    </span>
+                                    <span class="text-[10px] text-slate-400">
+                                        {{ formatDateTime(sos.triggered_at) }}
+                                    </span>
+                                </div>
+                                <div
+                                    v-if="
+                                        sos.triggered_latitude &&
+                                        sos.triggered_longitude
+                                    "
+                                    class="mb-2 flex items-center gap-1 font-mono text-[10px] text-slate-400"
+                                >
+                                    <span
+                                        >GPS: {{ sos.triggered_latitude }},
+                                        {{ sos.triggered_longitude }}</span
+                                    >
+                                    <span>•</span>
+                                    <a
+                                        :href="`https://www.google.com/maps/search/?api=1&query=${sos.triggered_latitude},${sos.triggered_longitude}`"
+                                        target="_blank"
+                                        class="text-indigo-400 underline hover:text-indigo-300"
+                                    >
+                                        View Map
+                                    </a>
+                                </div>
+                                <div
+                                    v-if="sos.resolution_note"
+                                    class="mt-2 rounded-xl border border-slate-800 bg-slate-950/60 p-2.5"
+                                >
+                                    <span
+                                        class="block font-mono text-[8px] font-black uppercase tracking-wider text-slate-500"
+                                    >
+                                        Resolution note
+                                    </span>
+                                    <p class="text-xs italic text-slate-400">
+                                        {{ sos.resolution_note }}
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>

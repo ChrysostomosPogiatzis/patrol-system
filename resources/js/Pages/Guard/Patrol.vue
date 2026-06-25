@@ -104,7 +104,9 @@ async function startVoiceRecording() {
         }, 1000);
     } catch (err) {
         console.error('Microphone access failed:', err);
-        alert('Could not access microphone.');
+        alert(
+            'Could not access microphone. Please ensure microphone permissions are granted in settings/browser, and the site is accessed via secure HTTPS.',
+        );
     }
 }
 
