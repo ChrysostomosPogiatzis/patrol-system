@@ -27,6 +27,7 @@ interface CheckpointLog {
     scan_method_used?: string;
     gps_distance_metres?: number;
     gps_within_fence?: boolean;
+    battery_pct?: number | null;
     checkpoint?: { name: string; description: string };
     media?: { id: number; kind: string; file_url: string }[];
 }
@@ -511,6 +512,25 @@ onMounted(() => loadHistory(1));
                                         class="font-bold text-amber-400"
                                         >⚠ Outside fence</span
                                     >
+                                </div>
+
+                                <!-- Battery at scan time -->
+                                <div
+                                    v-if="log.battery_pct != null"
+                                    class="flex items-center gap-1.5 text-[10px]"
+                                    :class="
+                                        log.battery_pct <= 15
+                                            ? 'text-red-400'
+                                            : log.battery_pct <= 30
+                                              ? 'text-amber-400'
+                                              : 'text-emerald-400'
+                                    "
+                                >
+                                    <svg class="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/>
+                                    </svg>
+                                    <span class="font-semibold">{{ log.battery_pct }}%</span>
+                                    <span class="text-slate-500">battery at scan</span>
                                 </div>
 
                                 <!-- Photos -->

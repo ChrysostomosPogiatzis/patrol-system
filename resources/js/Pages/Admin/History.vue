@@ -64,6 +64,7 @@ interface CheckpointLog {
     note?: string;
     gps_within_fence?: boolean;
     gps_distance_metres?: number | null;
+    battery_pct?: number | null;
     checkpoint: {
         name: string;
         description: string;
@@ -1072,6 +1073,23 @@ function getPriorityClass(priority: string) {
                                             Math.round(log.gps_distance_metres)
                                         }}m away)
                                     </span>
+                                </div>
+                                <!-- Battery at scan time -->
+                                <div
+                                    v-if="log.status === 'scanned' && log.battery_pct != null"
+                                    class="mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-semibold"
+                                    :class="
+                                        log.battery_pct <= 15
+                                            ? 'border-red-200 bg-red-50 text-red-600'
+                                            : log.battery_pct <= 30
+                                              ? 'border-amber-200 bg-amber-50 text-amber-600'
+                                              : 'border-emerald-200 bg-emerald-50 text-emerald-600'
+                                    "
+                                >
+                                    <svg class="h-3 w-3 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/>
+                                    </svg>
+                                    <span>{{ log.battery_pct }}% battery at scan</span>
                                 </div>
                                 <div
                                     v-else-if="log.status === 'skipped'"

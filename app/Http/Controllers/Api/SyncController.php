@@ -178,6 +178,7 @@ class SyncController extends Controller
                 'gps_distance_metres' => $distance,
                 'gps_within_fence' => $withinFence,
                 'note' => $payload['note'] ?? null,
+                'battery_pct' => $payload['battery_pct'] ?? null,
                 'recorded_offline' => true,
                 'device_timestamp' => $capturedAt,
                 'synced_at' => now(),

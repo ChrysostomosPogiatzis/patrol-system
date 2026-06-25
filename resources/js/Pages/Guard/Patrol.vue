@@ -1319,6 +1319,15 @@ async function executeScan(
     const lat = gps ? gps.latitude : 34.6712;
     const lon = gps ? gps.longitude : 33.0412;
 
+    // Retrieve battery percentage
+    let batteryLevel = 100;
+    try {
+        const batInfo = await CapacitorBridge.getBatteryInfo();
+        batteryLevel = batInfo.level;
+    } catch (e) {
+        console.error('Failed to get battery info for scan:', e);
+    }
+
     const expectedCode =
         method === 'qr'
             ? log.checkpoint.qr_code || 'DEMO-QR'
@@ -1331,6 +1340,7 @@ async function executeScan(
         longitude: lon,
         note: checkpointNote.value || null,
         scanned_code: scannedCode,
+        battery_pct: batteryLevel,
     };
 
     if (isOnline.value) {
@@ -1340,6 +1350,7 @@ async function executeScan(
             formData.append('latitude', lat.toString());
             formData.append('longitude', lon.toString());
             formData.append('scanned_code', scannedCode);
+            formData.append('battery_pct', batteryLevel.toString());
             if (checkpointNote.value) {
                 formData.append('note', checkpointNote.value);
             }

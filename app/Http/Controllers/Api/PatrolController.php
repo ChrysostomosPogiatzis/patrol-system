@@ -188,6 +188,7 @@ class PatrolController extends Controller
             'latitude' => 'required|numeric|between:-90,90',
             'longitude' => 'required|numeric|between:-180,180',
             'note' => 'nullable|string',
+            'battery_pct' => 'nullable|integer|between:0,100',
             'media_file' => 'nullable|file|max:10240', // 10MB limit
             'voice_file' => 'nullable|file|max:10240', // 10MB limit
             'signature_file' => 'nullable|file|max:5120', // 5MB limit
@@ -305,6 +306,7 @@ class PatrolController extends Controller
             'gps_distance_metres' => $distance,
             'gps_within_fence' => $withinFence,
             'note' => $request->note,
+            'battery_pct' => $request->battery_pct,
         ]);
 
         // 4. Handle media file upload
