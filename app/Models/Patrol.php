@@ -49,6 +49,13 @@ class Patrol extends Model
         'skipped_checkpoints' => 'integer',
         'incident_count' => 'integer',
     ];
+    
+    protected $appends = ['checkpoint_logs'];
+
+    public function getCheckpointLogsAttribute()
+    {
+        return $this->relationLoaded('checkpointLogs') ? $this->getRelation('checkpointLogs') : null;
+    }
 
     public function route(): BelongsTo
     {

@@ -402,6 +402,23 @@ function stopQrScanner() {
     }
 }
 
+// Helper to decode NDEF Text Record payload
+function decodeNdefTextRecord(payloadBytes: Uint8Array | number[]): string {
+    if (!payloadBytes || payloadBytes.length === 0) return '';
+    const bytes = Array.isArray(payloadBytes) ? new Uint8Array(payloadBytes) : payloadBytes;
+    const statusByte = bytes[0];
+    const isUtf16 = (statusByte & 0x80) !== 0;
+    const languageCodeLength = statusByte & 0x3f;
+    
+    if (1 + languageCodeLength > bytes.length) {
+        return new TextDecoder().decode(bytes);
+    }
+    
+    const textBytes = bytes.subarray(1 + languageCodeLength);
+    const decoder = new TextDecoder(isUtf16 ? 'utf-16' : 'utf-8');
+    return decoder.decode(textBytes);
+}
+
 // Start Capacitor NFC Tag Reader
 async function startCapacitorNfcReader(signatureBase64: string | null) {
     nfcStatusMessage.value = 'Place the back of your phone directly on top of the NFC tag.';
@@ -426,25 +443,45 @@ async function startCapacitorNfcReader(signatureBase64: string | null) {
         });
 
         const listener = await CapacitorNfc.addListener('nfcEvent', (event: any) => {
-            let scannedVal = event.serialNumber || '';
+            const tagIdBytes = event.tag?.id;
+            let serialNumber = '';
+            if (Array.isArray(tagIdBytes)) {
+                serialNumber = tagIdBytes.map((b: number) => b.toString(16).padStart(2, '0')).join(':');
+            }
+
+            let scannedVal = serialNumber;
             let matched = false;
 
-            if (scannedVal && scannedVal.toLowerCase() === expectedCode.toLowerCase()) {
+            if (serialNumber && (
+                serialNumber.toLowerCase() === expectedCode.toLowerCase() ||
+                serialNumber.replace(/:/g, '').toLowerCase() === expectedCode.toLowerCase()
+            )) {
                 matched = true;
             }
 
-            if (event.ndefMessage && event.ndefMessage.records) {
-                for (const record of event.ndefMessage.records) {
-                    if (record.data) {
+            if (event.tag?.ndefMessage) {
+                for (const record of event.tag.ndefMessage) {
+                    if (record.payload) {
                         try {
-                            const text = record.data;
-                            if (text.trim().toLowerCase() === expectedCode.toLowerCase()) {
+                            const isTextRecord = record.tnf === 1 && 
+                                                 Array.isArray(record.type) && 
+                                                 record.type.length === 1 && 
+                                                 record.type[0] === 84; // 84 is ASCII for 'T'
+                            
+                            let decodedText = '';
+                            if (isTextRecord) {
+                                decodedText = decodeNdefTextRecord(record.payload);
+                            } else {
+                                decodedText = new TextDecoder().decode(new Uint8Array(record.payload));
+                            }
+                            
+                            if (decodedText.trim().toLowerCase() === expectedCode.toLowerCase()) {
                                 matched = true;
-                                scannedVal = text;
+                                scannedVal = decodedText;
                                 break;
                             }
                         } catch (e) {
-                            console.error(e);
+                            console.error("Error parsing Capacitor NFC record payload:", e);
                         }
                     }
                 }
@@ -491,19 +528,33 @@ async function startNfcTagReader(signatureBase64: string | null) {
                 let matched = false;
                 let scannedVal = serialNumber || '';
 
-                if (serialNumber && serialNumber.toLowerCase() === expectedCode.toLowerCase()) {
+                if (serialNumber && (
+                    serialNumber.toLowerCase() === expectedCode.toLowerCase() ||
+                    serialNumber.replace(/:/g, '').toLowerCase() === expectedCode.toLowerCase()
+                )) {
                     matched = true;
                 }
 
                 // Parse records
                 if (message && message.records) {
                     for (const record of message.records) {
-                        const textDecoder = new TextDecoder(record.encoding);
-                        const text = textDecoder.decode(record.data);
-                        scannedVal = text;
-                        if (text.trim().toLowerCase() === expectedCode.toLowerCase()) {
-                            matched = true;
-                            break;
+                        try {
+                            let text = '';
+                            if (record.recordType === 'text') {
+                                const payloadBytes = new Uint8Array(record.data.buffer);
+                                text = decodeNdefTextRecord(payloadBytes);
+                            } else {
+                                const textDecoder = new TextDecoder(record.encoding || 'utf-8');
+                                text = textDecoder.decode(record.data);
+                            }
+                            
+                            if (text.trim().toLowerCase() === expectedCode.toLowerCase()) {
+                                matched = true;
+                                scannedVal = text;
+                                break;
+                            }
+                        } catch (e) {
+                            console.error("Error parsing Web NFC record data:", e);
                         }
                     }
                 }

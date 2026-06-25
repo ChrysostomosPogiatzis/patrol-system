@@ -10,6 +10,7 @@ use App\Models\Location;
 use App\Models\Patrol;
 use App\Models\PatrolContact;
 use App\Models\Route;
+use App\Models\RouteAssignment;
 use App\Models\RouteCheckpoint;
 use App\Models\SosAlert;
 use Illuminate\Http\JsonResponse;
@@ -888,5 +889,96 @@ class AdminDashboardController extends Controller
             'message' => 'Company profile updated successfully.',
             'tenant' => $tenant,
         ]);
+    }
+
+    /**
+     * List all route assignments for a specific guard.
+     */
+    public function listGuardAssignments($guardId): JsonResponse
+    {
+        $tenantId = session('override_tenant_id') ?: Auth::user()->tenant_id;
+        
+        $guardQuery = Guard::where('id', $guardId);
+        if ($tenantId) {
+            $guardQuery->where('tenant_id', $tenantId);
+        }
+        $guard = $guardQuery->firstOrFail();
+
+        $assignments = RouteAssignment::where('guard_id', $guard->id)
+            ->with(['route.routeCheckpoints.checkpoint.location'])
+            ->orderBy('id', 'desc')
+            ->get();
+
+        return response()->json(['assignments' => $assignments]);
+    }
+
+    /**
+     * Create a new route assignment for a guard.
+     */
+    public function createAssignment(Request $request): JsonResponse
+    {
+        $tenantId = session('override_tenant_id') ?: Auth::user()->tenant_id;
+
+        $request->validate([
+            'guard_id'       => 'required|exists:guards,id',
+            'route_id'       => 'required|exists:routes,id',
+            'schedule_start' => 'nullable|date',
+            'schedule_end'   => 'nullable|date|after_or_equal:schedule_start',
+            'cron_schedule'  => 'nullable|string|max:100',
+        ]);
+
+        $guardQuery = Guard::where('id', $request->guard_id);
+        $routeQuery = Route::where('id', $request->route_id);
+
+        if ($tenantId) {
+            $guardQuery->where('tenant_id', $tenantId);
+            $routeQuery->where('tenant_id', $tenantId);
+        }
+
+        $guard = $guardQuery->firstOrFail();
+        $route = $routeQuery->firstOrFail();
+
+        if (!$tenantId) {
+            if ($guard->tenant_id !== $route->tenant_id) {
+                return response()->json(['message' => 'Guard and Route must belong to the same company.'], 422);
+            }
+            $tenantId = $guard->tenant_id;
+        }
+
+        $assignment = RouteAssignment::create([
+            'tenant_id'      => $tenantId,
+            'guard_id'       => $guard->id,
+            'route_id'       => $route->id,
+            'schedule_start' => $request->schedule_start,
+            'schedule_end'   => $request->schedule_end,
+            'cron_schedule'  => $request->cron_schedule,
+            'is_active'      => true,
+            'assigned_by'    => Auth::id(),
+        ]);
+
+        $assignment->load(['route', 'securityGuard']);
+
+        return response()->json([
+            'message'    => 'Patrol route assigned successfully.',
+            'assignment' => $assignment,
+        ], 201);
+    }
+
+    /**
+     * Delete a route assignment.
+     */
+    public function deleteAssignment($id): JsonResponse
+    {
+        $tenantId = session('override_tenant_id') ?: Auth::user()->tenant_id;
+
+        $assignmentQuery = RouteAssignment::where('id', $id);
+        if ($tenantId) {
+            $assignmentQuery->where('tenant_id', $tenantId);
+        }
+        $assignment = $assignmentQuery->firstOrFail();
+
+        $assignment->delete();
+
+        return response()->json(['message' => 'Assignment removed successfully.']);
     }
 }

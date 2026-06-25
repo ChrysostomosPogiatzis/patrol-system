@@ -42,11 +42,19 @@ class SyncController extends Controller
             $payload = $item['payload'];
             $capturedAt = $item['captured_at'];
 
+            // Validate that the patrol_id actually exists to prevent foreign key violations
+            $patrolId = null;
+            if (isset($payload['patrol_id'])) {
+                if (\App\Models\Patrol::where('id', $payload['patrol_id'])->exists()) {
+                    $patrolId = $payload['patrol_id'];
+                }
+            }
+
             // Initialize log in the sync queue table
             $syncRecord = OfflineSyncQueue::create([
                 'tenant_id' => $guard->tenant_id,
                 'guard_id' => $guard->id,
-                'patrol_id' => $payload['patrol_id'] ?? null,
+                'patrol_id' => $patrolId,
                 'entity_type' => $entityType,
                 'entity_id' => null, // local ID can map elsewhere
                 'payload' => $payload,

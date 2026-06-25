@@ -6,6 +6,7 @@ import axios from 'axios';
 
 // Component Import
 import GuardModal from '@/Components/Admin/GuardModal.vue';
+import AssignPatrolModal from '@/Components/Admin/AssignPatrolModal.vue';
 
 interface Guard {
     id: number;
@@ -21,9 +22,20 @@ interface Guard {
     };
 }
 
+interface Route {
+    id: number;
+    name: string;
+    description?: string;
+    expected_duration_mins?: number;
+    route_checkpoints?: any[];
+}
+
 const guards = ref<Guard[]>([]);
+const routes = ref<Route[]>([]);
 const showAddGuardModal = ref(false);
 const editingGuard = ref<Guard | null>(null);
+const showAssignModal = ref(false);
+const assigningGuard = ref<Guard | null>(null);
 
 const page = usePage();
 const isAllCompaniesMode = computed(() => {
@@ -45,6 +57,15 @@ async function fetchGuards() {
     }
 }
 
+async function fetchRoutes() {
+    try {
+        const res = await axios.get('/admin/api/locations-data');
+        routes.value = res.data.routes;
+    } catch (e) {
+        console.error('Failed to fetch routes:', e);
+    }
+}
+
 function openAddGuard() {
     if (isAllCompaniesMode.value) return;
     editingGuard.value = null;
@@ -54,6 +75,11 @@ function openAddGuard() {
 function openEditGuard(guard: Guard) {
     editingGuard.value = guard;
     showAddGuardModal.value = true;
+}
+
+function openAssignPatrol(guard: Guard) {
+    assigningGuard.value = guard;
+    showAssignModal.value = true;
 }
 
 async function deleteGuard(id: number) {
@@ -141,6 +167,7 @@ function toggleSort(key: string) {
 
 onMounted(() => {
     fetchGuards();
+    fetchRoutes();
 });
 </script>
 
@@ -255,6 +282,12 @@ onMounted(() => {
                                 <td class="p-5 text-center">
                                     <div class="flex items-center justify-center space-x-2">
                                         <button 
+                                            @click="openAssignPatrol(g)"
+                                            class="bg-violet-50 hover:bg-violet-100 text-violet-750 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase font-mono tracking-wider border border-violet-100/60 active:scale-95 transition-all"
+                                        >
+                                            Assign Route
+                                        </button>
+                                        <button 
                                             @click="openEditGuard(g)"
                                             class="bg-indigo-50 hover:bg-indigo-100 text-indigo-650 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase font-mono tracking-wider border border-indigo-100/60 active:scale-95 transition-all"
                                         >
@@ -280,5 +313,6 @@ onMounted(() => {
 
         <!-- FORM MODAL -->
         <GuardModal :show="showAddGuardModal" :guard="editingGuard" @close="showAddGuardModal = false" @submit="submitAddGuard" />
+        <AssignPatrolModal :show="showAssignModal" :guard="assigningGuard" :routes="routes" @close="showAssignModal = false" @assigned="fetchGuards" />
     </AdminLayout>
 </template>

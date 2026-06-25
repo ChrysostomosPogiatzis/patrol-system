@@ -79,6 +79,11 @@ Route::middleware(['auth', 'subscription.active'])->group(function () {
         Route::put('/routes/{id}', [\App\Http\Controllers\Api\AdminDashboardController::class, 'updateRoute']);
         Route::delete('/routes/{id}', [\App\Http\Controllers\Api\AdminDashboardController::class, 'deleteRoute']);
         
+        // Route Assignments
+        Route::get('/guards/{guardId}/assignments', [\App\Http\Controllers\Api\AdminDashboardController::class, 'listGuardAssignments']);
+        Route::post('/assignments', [\App\Http\Controllers\Api\AdminDashboardController::class, 'createAssignment']);
+        Route::delete('/assignments/{id}', [\App\Http\Controllers\Api\AdminDashboardController::class, 'deleteAssignment']);
+        
         // Resolves
         Route::post('/incidents/{incident}/resolve', [\App\Http\Controllers\Api\AdminDashboardController::class, 'resolveIncident']);
         Route::post('/sos/{sos_alert}/resolve', [\App\Http\Controllers\Api\AdminDashboardController::class, 'resolveSos']);
