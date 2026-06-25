@@ -4,7 +4,7 @@ import { useOfflineSync } from '@/Composables/useOfflineSync';
 import { CapacitorBridge } from '@/Services/CapacitorBridge';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import axios from 'axios';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps<{
     guard: any;
@@ -24,12 +24,27 @@ const title = ref('');
 const description = ref('');
 const priority = ref<'low' | 'medium' | 'high' | 'critical'>('medium');
 const attachToPatrol = ref(!!props.activePatrol);
+const attachToCheckpoint = ref(true);
 const photos = ref<string[]>([]); // base64 strings
 const isSubmitting = ref(false);
 const showSuccessToast = ref(false);
 const errorMsg = ref<string | null>(null);
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
+
+// Find first pending/attempted checkpoint log in active patrol sequence
+const currentCheckpointLog = computed(() => {
+    if (!props.activePatrol || !props.activePatrol.checkpoint_logs) return null;
+    const logs = [...props.activePatrol.checkpoint_logs].sort(
+        (a, b) => a.position - b.position,
+    );
+    return (
+        logs.find(
+            (l) =>
+                l.status === 'pending' || l.status === 'out_of_order_attempt',
+        ) || null
+    );
+});
 
 // Capture real photo using Capacitor camera or browser file fallback
 async function handleCapturePhoto() {
@@ -112,6 +127,11 @@ async function handleSubmitIncident() {
             ? props.activePatrol.id
             : null;
 
+    const useCheckpointLogId =
+        usePatrolId && attachToCheckpoint.value && currentCheckpointLog.value
+            ? currentCheckpointLog.value.id
+            : null;
+
     if (isOnline.value) {
         try {
             const formData = new FormData();
@@ -122,6 +142,13 @@ async function handleSubmitIncident() {
 
             if (description.value) {
                 formData.append('description', description.value);
+            }
+
+            if (useCheckpointLogId) {
+                formData.append(
+                    'patrol_checkpoint_log_id',
+                    useCheckpointLogId.toString(),
+                );
             }
 
             // Attach photos
@@ -145,10 +172,10 @@ async function handleSubmitIncident() {
                 'Failed to submit incident online, falling back to queue:',
                 e,
             );
-            queueIncidentOffline(lat, lon, usePatrolId);
+            queueIncidentOffline(lat, lon, usePatrolId, useCheckpointLogId);
         }
     } else {
-        queueIncidentOffline(lat, lon, usePatrolId);
+        queueIncidentOffline(lat, lon, usePatrolId, useCheckpointLogId);
     }
 }
 
@@ -157,6 +184,7 @@ function queueIncidentOffline(
     lat: number,
     lon: number,
     patrolId: number | null,
+    checkpointLogId: number | null,
 ) {
     const payload = {
         title: title.value,
@@ -165,6 +193,15 @@ function queueIncidentOffline(
         latitude: lat,
         longitude: lon,
         patrol_id: patrolId,
+        patrol_checkpoint_log_id: checkpointLogId,
+        checkpoint_id:
+            checkpointLogId && currentCheckpointLog.value
+                ? currentCheckpointLog.value.checkpoint_id
+                : null,
+        location_id:
+            checkpointLogId && currentCheckpointLog.value?.checkpoint
+                ? currentCheckpointLog.value.checkpoint.location_id
+                : null,
         base64_media: photos.value.map((photo, idx) => ({
             data: photo.split(',')[1],
             filename: `incident_media_${idx}.jpg`,
@@ -281,23 +318,48 @@ function handleSuccessReset() {
             <!-- Patrol Context Binding Option -->
             <div
                 v-if="activePatrol"
-                class="border-slate-850 flex items-center space-x-3 rounded-2xl border bg-slate-950 p-3"
+                class="border-slate-850 flex flex-col space-y-3 rounded-2xl border bg-slate-950 p-3"
             >
-                <input
-                    v-model="attachToPatrol"
-                    id="attach-patrol"
-                    type="checkbox"
-                    class="w-4.5 h-4.5 rounded-md border border-slate-800 bg-slate-900 text-indigo-600 focus:ring-0 focus:ring-offset-0"
-                />
-                <label
-                    for="attach-patrol"
-                    class="cursor-pointer select-none text-xs font-medium text-slate-400"
+                <div class="flex items-center space-x-3">
+                    <input
+                        v-model="attachToPatrol"
+                        id="attach-patrol"
+                        type="checkbox"
+                        class="w-4.5 h-4.5 rounded-md border border-slate-800 bg-slate-900 text-indigo-600 focus:ring-0 focus:ring-offset-0"
+                    />
+                    <label
+                        for="attach-patrol"
+                        class="cursor-pointer select-none text-xs font-medium text-slate-400"
+                    >
+                        Link with active patrol:
+                        <span
+                            class="ml-1 font-mono font-bold text-indigo-400"
+                            >{{ activePatrol.route?.name }}</span
+                        >
+                    </label>
+                </div>
+
+                <!-- Checkpoint Context Binding Option -->
+                <div
+                    v-if="attachToPatrol && currentCheckpointLog"
+                    class="flex items-center space-x-3 border-l border-slate-800/80 pl-6"
                 >
-                    Link with active patrol:
-                    <span class="ml-1 font-mono font-bold text-indigo-400">{{
-                        activePatrol.route?.name
-                    }}</span>
-                </label>
+                    <input
+                        v-model="attachToCheckpoint"
+                        id="attach-checkpoint"
+                        type="checkbox"
+                        class="h-4 w-4 rounded-md border border-slate-800 bg-slate-900 text-indigo-600 focus:ring-0 focus:ring-offset-0"
+                    />
+                    <label
+                        for="attach-checkpoint"
+                        class="cursor-pointer select-none text-xs font-medium text-slate-400"
+                    >
+                        Link to current checkpoint:
+                        <span class="ml-1 font-bold text-indigo-400">{{
+                            currentCheckpointLog.checkpoint?.name
+                        }}</span>
+                    </label>
+                </div>
             </div>
 
             <!-- Description -->
