@@ -159,7 +159,7 @@ class AdminDashboardController extends Controller
     {
         $locations = Location::with(['checkpoints', 'tenant'])->get();
         $checkpoints = Checkpoint::with(['location', 'tenant'])->get();
-        $routes = Route::with(['routeCheckpoints.checkpoint', 'tenant'])->get();
+        $routes = Route::with(['routeCheckpoints.checkpoint.location', 'tenant'])->get();
 
         return response()->json([
             'locations' => $locations,
