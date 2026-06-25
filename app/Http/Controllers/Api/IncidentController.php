@@ -75,16 +75,18 @@ class IncidentController extends Controller
         if ($request->hasFile('media_files')) {
             foreach ($request->file('media_files') as $file) {
                 $path = $file->store("tenants/{$guard->tenant_id}/incidents/{$incident->id}", 'public');
+                $mime = $file->getMimeType();
+                $kind = str_contains($mime, 'audio') ? 'voice_memo' : 'photo';
 
                 IncidentMedia::create([
                     'tenant_id' => $guard->tenant_id,
                     'incident_id' => $incident->id,
                     'guard_id' => $guard->id,
-                    'kind' => 'photo', // could detect voice files as voice_memo
+                    'kind' => $kind,
                     'file_url' => asset('storage/' . $path),
                     'file_key' => $path,
                     'file_size_bytes' => $file->getSize(),
-                    'mime_type' => $file->getMimeType(),
+                    'mime_type' => $mime,
                     'captured_at' => now(),
                     'capture_latitude' => $request->latitude,
                     'capture_longitude' => $request->longitude,

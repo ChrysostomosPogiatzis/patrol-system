@@ -4,7 +4,7 @@ import { useOfflineSync } from '@/Composables/useOfflineSync';
 import { CapacitorBridge } from '@/Services/CapacitorBridge';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import axios from 'axios';
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, onUnmounted, ref, watch } from 'vue';
 
 interface Checkpoint {
     id: number;
@@ -51,7 +51,7 @@ const emit = defineEmits<{
 }>();
 
 const { isOnline, addToQueue } = useOfflineSync();
-const { updateLocation } = useGeolocation();
+const { updateLocation, currentPosition } = useGeolocation();
 
 // Active states
 const logs = ref<CheckpointLog[]>([]);
@@ -63,9 +63,269 @@ const skipReason = ref('');
 // Scan form states for current active checkpoint
 const checkpointNote = ref('');
 const checkpointPhoto = ref<string | null>(null); // base64 string
+
+// Voice memo recording states for checkpoints
+const isVoiceRecording = ref(false);
+const voiceRecordingDuration = ref(0);
+const checkpointVoiceBlob = ref<Blob | null>(null);
+const checkpointVoiceUrl = ref<string | null>(null);
+let checkpointMediaRecorder: MediaRecorder | null = null;
+let checkpointRecordingTimer: any = null;
+
+async function startVoiceRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+        });
+        checkpointMediaRecorder = new MediaRecorder(stream);
+        const chunks: Blob[] = [];
+
+        checkpointMediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+                chunks.push(e.data);
+            }
+        };
+
+        checkpointMediaRecorder.onstop = () => {
+            checkpointVoiceBlob.value = new Blob(chunks, { type: 'audio/wav' });
+            checkpointVoiceUrl.value = URL.createObjectURL(
+                checkpointVoiceBlob.value,
+            );
+            stream.getTracks().forEach((track) => track.stop());
+        };
+
+        isVoiceRecording.value = true;
+        voiceRecordingDuration.value = 0;
+        checkpointMediaRecorder.start();
+
+        checkpointRecordingTimer = setInterval(() => {
+            voiceRecordingDuration.value++;
+        }, 1000);
+    } catch (err) {
+        console.error('Microphone access failed:', err);
+        alert('Could not access microphone.');
+    }
+}
+
+function stopVoiceRecording() {
+    if (
+        checkpointMediaRecorder &&
+        checkpointMediaRecorder.state !== 'inactive'
+    ) {
+        checkpointMediaRecorder.stop();
+    }
+    isVoiceRecording.value = false;
+    if (checkpointRecordingTimer) {
+        clearInterval(checkpointRecordingTimer);
+        checkpointRecordingTimer = null;
+    }
+}
+
+function deleteVoiceRecording() {
+    checkpointVoiceBlob.value = null;
+    checkpointVoiceUrl.value = null;
+    voiceRecordingDuration.value = 0;
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64String = reader.result as string;
+            resolve(base64String.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
 const showScanSimulator = ref(false);
 const simulatorMethod = ref<'qr' | 'nfc'>('qr');
 const simulatorProgress = ref(0);
+
+// Map states
+const patrolMapContainer = ref<HTMLDivElement | null>(null);
+const isMapLoaded = ref(false);
+const mapLoadError = ref<string | null>(null);
+let mapInstance: any = null;
+let markersLayerGroup: any = null;
+let polylineLayerGroup: any = null;
+
+function loadLeaflet(): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if ((window as any).L) {
+            resolve();
+            return;
+        }
+
+        // CSS
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+        document.head.appendChild(link);
+
+        // JS
+        const script = document.createElement('script');
+        script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        script.onload = () => resolve();
+        script.onerror = () =>
+            reject(new Error('Leaflet library failed to load.'));
+        document.head.appendChild(script);
+    });
+}
+
+function initMap() {
+    if (!patrolMapContainer.value) return;
+
+    const L = (window as any).L;
+    if (!L) return;
+
+    // Center coordinates - default to first checkpoint if available, or Limassol fallback
+    let centerLat = 34.6786;
+    let centerLon = 33.0413;
+    let zoomLevel = 15;
+
+    // Find first checkpoint with valid coordinates
+    const firstValidCp = logs.value.find(
+        (log) =>
+            log.checkpoint &&
+            log.checkpoint.latitude &&
+            log.checkpoint.longitude,
+    );
+    if (firstValidCp?.checkpoint) {
+        centerLat = Number(firstValidCp.checkpoint.latitude);
+        centerLon = Number(firstValidCp.checkpoint.longitude);
+    } else if (currentPosition.value) {
+        centerLat = currentPosition.value.latitude;
+        centerLon = currentPosition.value.longitude;
+    }
+
+    mapInstance = L.map(patrolMapContainer.value, {
+        center: [centerLat, centerLon],
+        zoom: zoomLevel,
+        zoomControl: false, // compact for mobile
+    });
+
+    // Dark-themed tiles
+    L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+        {
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 20,
+        },
+    ).addTo(mapInstance);
+
+    markersLayerGroup = L.layerGroup().addTo(mapInstance);
+    polylineLayerGroup = L.layerGroup().addTo(mapInstance);
+
+    renderMapLayers();
+}
+
+function renderMapLayers() {
+    const L = (window as any).L;
+    if (!L || !mapInstance || !markersLayerGroup || !polylineLayerGroup) return;
+
+    // Clear previous elements
+    markersLayerGroup.clearLayers();
+    polylineLayerGroup.clearLayers();
+
+    // 1. Draw Checkpoints
+    const routeCoords: [number, number][] = [];
+
+    // Sort logs by position to ensure sequential path lines
+    const sortedLogs = [...logs.value].sort((a, b) => a.position - b.position);
+
+    sortedLogs.forEach((log) => {
+        const cp = log.checkpoint;
+        if (
+            !cp ||
+            cp.latitude === undefined ||
+            cp.longitude === undefined ||
+            cp.latitude === null ||
+            cp.longitude === null
+        )
+            return;
+
+        const lat = Number(cp.latitude);
+        const lon = Number(cp.longitude);
+        routeCoords.push([lat, lon]);
+
+        // Color coding
+        // scanned = green (#10B981), skipped = orange (#F59E0B), pending = indigo (#6366F1)
+        let color = '#6366F1';
+        let statusText = 'Pending';
+        if (log.status === 'scanned') {
+            color = '#10B981';
+            statusText = 'Scanned';
+        } else if (log.status === 'skipped') {
+            color = '#F59E0B';
+            statusText = 'Skipped';
+        }
+
+        // Draw checkpoint circle
+        const circle = L.circleMarker([lat, lon], {
+            radius: 8,
+            fillColor: color,
+            color: '#FFFFFF',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.9,
+        });
+
+        circle.bindPopup(`
+            <div class="text-xs font-sans text-slate-900">
+                <p class="font-bold">${cp.name}</p>
+                <p class="text-[10px] text-slate-500">${statusText}</p>
+            </div>
+        `);
+
+        markersLayerGroup.addLayer(circle);
+    });
+
+    // 2. Draw Polyline Path (dashed)
+    if (routeCoords.length > 1) {
+        const polyline = L.polyline(routeCoords, {
+            color: '#6366F1',
+            weight: 2,
+            dashArray: '5, 8',
+            opacity: 0.6,
+        });
+        polylineLayerGroup.addLayer(polyline);
+    }
+
+    // 3. Draw Guard Location
+    if (currentPosition.value) {
+        const lat = currentPosition.value.latitude;
+        const lon = currentPosition.value.longitude;
+
+        // Custom pulsing marker or simple circle marker with pulsing CSS
+        const guardCircle = L.circleMarker([lat, lon], {
+            radius: 6,
+            fillColor: '#3B82F6',
+            color: '#FFFFFF',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 1,
+        });
+
+        // Add a secondary larger, transparent circle for pulsing look
+        const pulseCircle = L.circle([lat, lon], {
+            radius: 15,
+            fillColor: '#3B82F6',
+            color: '#3B82F6',
+            weight: 1,
+            opacity: 0.4,
+            fillOpacity: 0.15,
+        });
+
+        guardCircle.bindPopup(
+            '<div class="text-xs font-sans text-slate-900 font-bold">Your Location</div>',
+        );
+
+        markersLayerGroup.addLayer(pulseCircle);
+        markersLayerGroup.addLayer(guardCircle);
+    }
+}
 
 // Completing patrol states
 const generalNote = ref('');
@@ -313,6 +573,15 @@ async function startScan(method: 'qr' | 'nfc') {
         !checkpointPhoto.value
     ) {
         alert('Photo capture is required for this checkpoint.');
+        return;
+    }
+
+    // Voice memo required validation
+    if (
+        activeLog.checkpoint.voice_requirement === 'required' &&
+        !checkpointVoiceBlob.value
+    ) {
+        alert('Voice memo recording is required for this checkpoint.');
         return;
     }
 
@@ -768,6 +1037,14 @@ async function executeScan(
                 );
                 formData.append('media_file', photoFile);
             }
+            if (checkpointVoiceBlob.value) {
+                const voiceFile = new File(
+                    [checkpointVoiceBlob.value],
+                    'checkpoint_voice.wav',
+                    { type: 'audio/wav' },
+                );
+                formData.append('voice_file', voiceFile);
+            }
             if (signatureBase64) {
                 const sigFile = base64ToFile(signatureBase64, 'signature.png');
                 formData.append('signature_file', sigFile);
@@ -790,21 +1067,22 @@ async function executeScan(
             );
         } catch (e: any) {
             console.error('Direct scan failed, queuing offline:', e);
-            queueOfflineScan(log, payload, method, signatureBase64);
+            await queueOfflineScan(log, payload, method, signatureBase64);
         }
     } else {
-        queueOfflineScan(log, payload, method, signatureBase64);
+        await queueOfflineScan(log, payload, method, signatureBase64);
     }
 
     checkpointNote.value = '';
     checkpointPhoto.value = null;
+    deleteVoiceRecording();
     clearSignature(sigCanvasRefs.value[log.id]);
     currentLoadingId.value = null;
     saveLogsCache();
     checkPatrolCompletion();
 }
 
-function queueOfflineScan(
+async function queueOfflineScan(
     log: CheckpointLog,
     payload: any,
     method: string,
@@ -825,6 +1103,26 @@ function queueOfflineScan(
             latitude: payload.latitude,
             longitude: payload.longitude,
         });
+    }
+
+    if (checkpointVoiceBlob.value) {
+        try {
+            const base64Audio = await blobToBase64(checkpointVoiceBlob.value);
+            addToQueue('checkpoint_media', {
+                patrol_checkpoint_log_id: log.id,
+                base64_data: base64Audio,
+                filename: 'checkpoint_voice.wav',
+                kind: 'voice_memo',
+                mime_type: 'audio/wav',
+                latitude: payload.latitude,
+                longitude: payload.longitude,
+            });
+        } catch (err) {
+            console.error(
+                'Failed to convert checkpoint voice blob to base64:',
+                err,
+            );
+        }
     }
 
     log.status = 'scanned';
@@ -1013,7 +1311,7 @@ function queueOfflineCompletion(
     emit('patrol-completed');
 }
 
-onMounted(() => {
+onMounted(async () => {
     loadPatrolLogs();
     checkPatrolCompletion();
 
@@ -1028,6 +1326,42 @@ onMounted(() => {
         },
         { immediate: true },
     );
+
+    // Initialize map
+    try {
+        await loadLeaflet();
+        isMapLoaded.value = true;
+        initMap();
+    } catch (err: any) {
+        console.error('Failed to load Leaflet map:', err);
+        mapLoadError.value = err.message || 'Map failed to load';
+    }
+
+    watch(
+        () => currentPosition.value,
+        () => {
+            if (isMapLoaded.value && mapInstance) {
+                renderMapLayers();
+            }
+        },
+    );
+
+    watch(
+        () => logs.value,
+        () => {
+            if (isMapLoaded.value && mapInstance) {
+                renderMapLayers();
+            }
+        },
+        { deep: true },
+    );
+});
+
+onUnmounted(() => {
+    if (mapInstance) {
+        mapInstance.remove();
+        mapInstance = null;
+    }
 });
 </script>
 
@@ -1136,6 +1470,27 @@ onMounted(() => {
                         </svg>
                         Refresh
                     </button>
+                </div>
+
+                <!-- Live Checkpoint Proximity Map -->
+                <div v-if="activePatrol" class="space-y-2">
+                    <div
+                        ref="patrolMapContainer"
+                        class="border-slate-850 relative z-10 h-[200px] w-full overflow-hidden rounded-2xl border bg-slate-950"
+                    >
+                        <div
+                            v-if="!isMapLoaded && !mapLoadError"
+                            class="absolute inset-0 flex items-center justify-center text-xs text-slate-500"
+                        >
+                            Loading Map Assets...
+                        </div>
+                        <div
+                            v-if="mapLoadError"
+                            class="absolute inset-0 flex items-center justify-center p-4 text-center text-xs text-rose-500"
+                        >
+                            {{ mapLoadError }}
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Loading logs -->
@@ -1330,6 +1685,24 @@ onMounted(() => {
                                 >
                                     SIGNATURE REQUIRED
                                 </span>
+                                <span
+                                    v-if="
+                                        log.checkpoint.voice_requirement !==
+                                        'off'
+                                    "
+                                    class="flex items-center rounded border px-2 py-0.5"
+                                    :class="
+                                        log.checkpoint.voice_requirement ===
+                                        'required'
+                                            ? 'border-indigo-500/20 bg-indigo-500/10 text-indigo-400'
+                                            : 'border-slate-800 bg-slate-950 text-slate-400'
+                                    "
+                                >
+                                    VOICE:
+                                    {{
+                                        log.checkpoint.voice_requirement.toUpperCase()
+                                    }}
+                                </span>
                             </div>
 
                             <!-- Optional Note Input -->
@@ -1417,6 +1790,99 @@ onMounted(() => {
                                         :src="checkpointPhoto"
                                         class="h-full w-full object-cover"
                                     />
+                                </div>
+                            </div>
+
+                            <!-- Checkpoint Voice Memo Recording -->
+                            <div
+                                v-if="
+                                    log.checkpoint.voice_requirement !== 'off'
+                                "
+                                class="space-y-2 border-t border-slate-800/60 pt-3"
+                            >
+                                <label
+                                    class="block text-[10px] font-bold uppercase tracking-wider text-slate-400"
+                                >
+                                    Audio Evidence (Voice Memo)
+                                    <span
+                                        v-if="
+                                            log.checkpoint.voice_requirement ===
+                                            'required'
+                                        "
+                                        class="text-rose-500"
+                                        >*</span
+                                    >
+                                </label>
+                                <div class="flex items-center space-x-3">
+                                    <!-- Record Button -->
+                                    <button
+                                        v-if="
+                                            !isVoiceRecording &&
+                                            !checkpointVoiceUrl
+                                        "
+                                        @click="startVoiceRecording"
+                                        type="button"
+                                        class="bg-violet-650 flex items-center space-x-2 rounded-xl px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-violet-600 active:scale-95"
+                                    >
+                                        <svg
+                                            class="h-4 w-4 text-white"
+                                            fill="currentColor"
+                                            viewBox="0 0 20 20"
+                                        >
+                                            <path
+                                                fill-rule="evenodd"
+                                                d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm3 10a5.964 5.964 0 003.9-1.5 1 1 0 011.4 1.4A7.964 7.964 0 0111 15.9V18a1 1 0 11-2 0v-2.1a7.965 7.965 0 01-5.3-2.0 1 1 0 111.4-1.4 5.963 5.963 0 003.9 1.5z"
+                                                clip-rule="evenodd"
+                                            />
+                                        </svg>
+                                        <span>Record Voice Memo</span>
+                                    </button>
+
+                                    <!-- Recording Status -->
+                                    <div
+                                        v-else-if="isVoiceRecording"
+                                        class="flex items-center space-x-3 rounded-xl border border-rose-500/30 bg-rose-500/15 px-4 py-2 text-rose-400"
+                                    >
+                                        <span class="relative flex h-2 w-2">
+                                            <span
+                                                class="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"
+                                            ></span>
+                                            <span
+                                                class="relative inline-flex h-2 w-2 rounded-full bg-rose-500"
+                                            ></span>
+                                        </span>
+                                        <span
+                                            class="font-mono text-xs font-bold"
+                                            >Recording:
+                                            {{ voiceRecordingDuration }}s</span
+                                        >
+                                        <button
+                                            @click="stopVoiceRecording"
+                                            type="button"
+                                            class="rounded-lg bg-rose-600 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white transition-all hover:bg-rose-500 active:scale-95"
+                                        >
+                                            Stop
+                                        </button>
+                                    </div>
+
+                                    <!-- Playback Preview -->
+                                    <div
+                                        v-else-if="checkpointVoiceUrl"
+                                        class="border-slate-850 flex w-full items-center justify-between rounded-2xl border bg-slate-950 p-2.5"
+                                    >
+                                        <audio
+                                            :src="checkpointVoiceUrl"
+                                            controls
+                                            class="h-8 max-w-[240px]"
+                                        ></audio>
+                                        <button
+                                            @click="deleteVoiceRecording"
+                                            type="button"
+                                            class="rounded-xl border border-rose-500/10 bg-rose-500/5 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-rose-500 transition-all hover:text-rose-400 active:scale-95"
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 

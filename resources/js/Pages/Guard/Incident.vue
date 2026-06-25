@@ -32,6 +32,76 @@ const errorMsg = ref<string | null>(null);
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
+// Audio recording states
+const isRecording = ref(false);
+const recordingDuration = ref(0);
+const voiceBlob = ref<Blob | null>(null);
+const voiceUrl = ref<string | null>(null);
+let mediaRecorder: MediaRecorder | null = null;
+let recordingTimer: any = null;
+
+async function startRecording() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+        });
+        mediaRecorder = new MediaRecorder(stream);
+        const chunks: Blob[] = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+                chunks.push(e.data);
+            }
+        };
+
+        mediaRecorder.onstop = () => {
+            voiceBlob.value = new Blob(chunks, { type: 'audio/wav' });
+            voiceUrl.value = URL.createObjectURL(voiceBlob.value);
+            stream.getTracks().forEach((track) => track.stop());
+        };
+
+        isRecording.value = true;
+        recordingDuration.value = 0;
+        mediaRecorder.start();
+
+        recordingTimer = setInterval(() => {
+            recordingDuration.value++;
+        }, 1000);
+    } catch (err) {
+        console.error('Microphone access denied or failed:', err);
+        alert('Could not access microphone. Please check permissions.');
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+    isRecording.value = false;
+    if (recordingTimer) {
+        clearInterval(recordingTimer);
+        recordingTimer = null;
+    }
+}
+
+function deleteRecording() {
+    voiceBlob.value = null;
+    voiceUrl.value = null;
+    recordingDuration.value = 0;
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const base64String = reader.result as string;
+            resolve(base64String.split(',')[1]);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
 // Find first pending/attempted checkpoint log in active patrol sequence
 const currentCheckpointLog = computed(() => {
     if (!props.activePatrol || !props.activePatrol.checkpoint_logs) return null;
@@ -157,6 +227,17 @@ async function handleSubmitIncident() {
                 formData.append(`media_files[${idx}]`, file);
             });
 
+            // Attach voice memo if recorded
+            if (voiceBlob.value) {
+                const audioFile = new File(
+                    [voiceBlob.value],
+                    'incident_voice.wav',
+                    { type: 'audio/wav' },
+                );
+                const photosLength = photos.value.length;
+                formData.append(`media_files[${photosLength}]`, audioFile);
+            }
+
             // Endpoint selection
             const url = usePatrolId
                 ? `/api/guard/patrols/${usePatrolId}/incidents`
@@ -172,20 +253,44 @@ async function handleSubmitIncident() {
                 'Failed to submit incident online, falling back to queue:',
                 e,
             );
-            queueIncidentOffline(lat, lon, usePatrolId, useCheckpointLogId);
+            await queueIncidentOffline(
+                lat,
+                lon,
+                usePatrolId,
+                useCheckpointLogId,
+            );
         }
     } else {
-        queueIncidentOffline(lat, lon, usePatrolId, useCheckpointLogId);
+        await queueIncidentOffline(lat, lon, usePatrolId, useCheckpointLogId);
     }
 }
 
 // Queue offline helper
-function queueIncidentOffline(
+async function queueIncidentOffline(
     lat: number,
     lon: number,
     patrolId: number | null,
     checkpointLogId: number | null,
 ) {
+    const base64Media = photos.value.map((photo, idx) => ({
+        data: photo.split(',')[1],
+        filename: `incident_media_${idx}.jpg`,
+        mime_type: 'image/jpeg',
+    }));
+
+    if (voiceBlob.value) {
+        try {
+            const base64Audio = await blobToBase64(voiceBlob.value);
+            base64Media.push({
+                data: base64Audio,
+                filename: 'incident_voice.wav',
+                mime_type: 'audio/wav',
+            });
+        } catch (err) {
+            console.error('Failed to convert voice blob to base64:', err);
+        }
+    }
+
     const payload = {
         title: title.value,
         description: description.value || null,
@@ -202,10 +307,7 @@ function queueIncidentOffline(
             checkpointLogId && currentCheckpointLog.value?.checkpoint
                 ? currentCheckpointLog.value.checkpoint.location_id
                 : null,
-        base64_media: photos.value.map((photo, idx) => ({
-            data: photo.split(',')[1],
-            filename: `incident_media_${idx}.jpg`,
-        })),
+        base64_media: base64Media,
     };
 
     addToQueue('incident', payload);
@@ -227,6 +329,7 @@ function handleSuccessReset() {
     description.value = '';
     priority.value = 'medium';
     photos.value = [];
+    deleteRecording();
 
     // Clear toast
     setTimeout(() => {
@@ -439,6 +542,81 @@ function handleSuccessReset() {
                             class="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-slate-800 bg-slate-950/80 text-xs text-rose-500 backdrop-blur hover:bg-slate-900 focus:outline-none"
                         >
                             ×
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Voice Memo Evidence -->
+            <div class="space-y-3 border-t border-slate-800/60 pt-4">
+                <label
+                    class="block pl-1 text-[10px] font-bold uppercase tracking-widest text-slate-400"
+                    >Audio Evidence (Voice Memo)</label
+                >
+
+                <div class="flex items-center space-x-3">
+                    <!-- Record Button -->
+                    <button
+                        v-if="!isRecording && !voiceUrl"
+                        @click="startRecording"
+                        type="button"
+                        class="bg-violet-650 flex items-center space-x-2 rounded-xl px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-violet-600 active:scale-95"
+                    >
+                        <svg
+                            class="h-4 w-4 text-white"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                        >
+                            <path
+                                fill-rule="evenodd"
+                                d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm3 10a5.964 5.964 0 003.9-1.5 1 1 0 011.4 1.4A7.964 7.964 0 0111 15.9V18a1 1 0 11-2 0v-2.1a7.965 7.965 0 01-5.3-2.0 1 1 0 111.4-1.4 5.963 5.963 0 003.9 1.5z"
+                                clip-rule="evenodd"
+                            />
+                        </svg>
+                        <span>Record Voice Memo</span>
+                    </button>
+
+                    <!-- Recording Status -->
+                    <div
+                        v-else-if="isRecording"
+                        class="flex items-center space-x-3 rounded-xl border border-rose-500/30 bg-rose-500/15 px-4 py-2 text-rose-400"
+                    >
+                        <span class="relative flex h-2 w-2">
+                            <span
+                                class="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"
+                            ></span>
+                            <span
+                                class="relative inline-flex h-2 w-2 rounded-full bg-rose-500"
+                            ></span>
+                        </span>
+                        <span class="font-mono text-xs font-bold"
+                            >Recording: {{ recordingDuration }}s</span
+                        >
+                        <button
+                            @click="stopRecording"
+                            type="button"
+                            class="rounded-lg bg-rose-600 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white transition-all hover:bg-rose-500 active:scale-95"
+                        >
+                            Stop
+                        </button>
+                    </div>
+
+                    <!-- Voice Memo Playback preview -->
+                    <div
+                        v-else-if="voiceUrl"
+                        class="border-slate-850 flex w-full items-center justify-between rounded-2xl border bg-slate-950 p-2.5"
+                    >
+                        <audio
+                            :src="voiceUrl"
+                            controls
+                            class="h-8 max-w-[240px]"
+                        ></audio>
+                        <button
+                            @click="deleteRecording"
+                            type="button"
+                            class="rounded-xl border border-rose-500/10 bg-rose-500/5 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-rose-500 transition-all hover:text-rose-400 active:scale-95"
+                        >
+                            Delete
                         </button>
                     </div>
                 </div>

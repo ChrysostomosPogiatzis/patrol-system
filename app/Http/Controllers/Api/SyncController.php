@@ -233,11 +233,14 @@ class SyncController extends Controller
                     $path = "tenants/{$guard->tenant_id}/incidents/{$incident->id}/{$filename}";
                     Storage::disk('public')->put($path, $decoded);
 
+                    $mime = $mediaItem['mime_type'] ?? 'image/jpeg';
+                    $kind = (str_contains($mime, 'audio') || str_contains($filename, 'voice') || str_contains($filename, 'audio')) ? 'voice_memo' : 'photo';
+
                     IncidentMedia::create([
                         'tenant_id' => $guard->tenant_id,
                         'incident_id' => $incident->id,
                         'guard_id' => $guard->id,
-                        'kind' => 'photo',
+                        'kind' => $kind,
                         'file_url' => asset('storage/' . $path),
                         'file_key' => $path,
                         'file_size_bytes' => strlen($decoded),

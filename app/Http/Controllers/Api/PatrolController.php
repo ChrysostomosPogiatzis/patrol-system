@@ -186,6 +186,7 @@ class PatrolController extends Controller
             'longitude' => 'required|numeric|between:-180,180',
             'note' => 'nullable|string',
             'media_file' => 'nullable|file|max:10240', // 10MB limit
+            'voice_file' => 'nullable|file|max:10240', // 10MB limit
             'signature_file' => 'nullable|file|max:5120', // 5MB limit
         ]);
 
@@ -302,17 +303,19 @@ class PatrolController extends Controller
             $file = $request->file('media_file');
             // Store file securely in a public location
             $path = $file->store("tenants/{$guard->tenant_id}/patrols/{$patrol->id}", 'public');
+            $mime = $file->getMimeType();
+            $kind = str_contains($mime, 'audio') ? 'voice_memo' : 'photo';
 
             CheckpointMedia::create([
                 'tenant_id' => $guard->tenant_id,
                 'patrol_checkpoint_log_id' => $log->id,
                 'patrol_id' => $patrol->id,
                 'guard_id' => $guard->id,
-                'kind' => 'photo', // default to photo, could detect mime type to set voice_memo
+                'kind' => $kind,
                 'file_url' => asset('storage/' . $path),
                 'file_key' => $path,
                 'file_size_bytes' => $file->getSize(),
-                'mime_type' => $file->getMimeType(),
+                'mime_type' => $mime,
                 'captured_at' => now(),
                 'capture_latitude' => $request->latitude,
                 'capture_longitude' => $request->longitude,
@@ -320,7 +323,29 @@ class PatrolController extends Controller
             ]);
         }
 
-        // 4.1 Handle signature file upload
+        // 4.1 Handle voice file upload
+        if ($request->hasFile('voice_file')) {
+            $voiceFile = $request->file('voice_file');
+            $voicePath = $voiceFile->store("tenants/{$guard->tenant_id}/patrols/{$patrol->id}/voices", 'public');
+
+            CheckpointMedia::create([
+                'tenant_id' => $guard->tenant_id,
+                'patrol_checkpoint_log_id' => $log->id,
+                'patrol_id' => $patrol->id,
+                'guard_id' => $guard->id,
+                'kind' => 'voice_memo',
+                'file_url' => asset('storage/' . $voicePath),
+                'file_key' => $voicePath,
+                'file_size_bytes' => $voiceFile->getSize(),
+                'mime_type' => $voiceFile->getMimeType(),
+                'captured_at' => now(),
+                'capture_latitude' => $request->latitude,
+                'capture_longitude' => $request->longitude,
+                'recorded_offline' => false,
+            ]);
+        }
+
+        // 4.2 Handle signature file upload
         if ($request->hasFile('signature_file')) {
             $sigFile = $request->file('signature_file');
             $sigPath = $sigFile->store("tenants/{$guard->tenant_id}/patrols/{$patrol->id}/signatures", 'public');
