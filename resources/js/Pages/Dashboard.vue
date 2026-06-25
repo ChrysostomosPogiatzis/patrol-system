@@ -516,6 +516,46 @@ watch(activeTab, (newTab) => {
                                         ).toLocaleTimeString()
                                     }}</span
                                 >
+                                <div
+                                    class="mt-1 flex items-center space-x-1.5 text-[9px] font-bold text-rose-400"
+                                >
+                                    <svg
+                                        class="h-3 w-3 animate-pulse text-rose-500"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2.5"
+                                            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                                        />
+                                        <path
+                                            stroke-linecap="round"
+                                            stroke-linejoin="round"
+                                            stroke-width="2.5"
+                                            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                                        />
+                                    </svg>
+                                    <a
+                                        :href="`https://www.google.com/maps/search/?api=1&query=${sos.triggered_latitude},${sos.triggered_longitude}`"
+                                        target="_blank"
+                                        class="underline hover:text-rose-300"
+                                    >
+                                        GPS:
+                                        {{
+                                            Number(
+                                                sos.triggered_latitude,
+                                            ).toFixed(6)
+                                        }},
+                                        {{
+                                            Number(
+                                                sos.triggered_longitude,
+                                            ).toFixed(6)
+                                        }}
+                                    </a>
+                                </div>
                             </div>
                             <button
                                 @click="
