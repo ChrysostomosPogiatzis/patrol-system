@@ -178,6 +178,7 @@ async function loadPatrolLogs() {
             saveLogsCache();
         }
         logsLoading.value = false;
+        checkPatrolCompletion();
         return;
     }
 
@@ -208,6 +209,7 @@ async function loadPatrolLogs() {
         }
     } finally {
         logsLoading.value = false;
+        checkPatrolCompletion();
     }
 }
 
