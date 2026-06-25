@@ -514,7 +514,7 @@ onMounted(() => loadHistory(1));
                                 </div>
 
                                 <!-- Photos -->
-                                <div v-if="log.media && log.media.length > 0">
+                                <div v-if="log.media && log.media.filter(x => x.kind === 'photo').length > 0" class="mt-2">
                                     <p
                                         class="mb-2 text-[9px] font-bold uppercase tracking-widest text-slate-500"
                                     >
@@ -528,6 +528,40 @@ onMounted(() => loadHistory(1));
                                             :key="m.id"
                                             :src="m.file_url"
                                             class="h-16 w-20 rounded-xl border border-slate-700 bg-slate-800 object-cover"
+                                            loading="lazy"
+                                        />
+                                    </div>
+                                </div>
+
+                                <!-- Voice Memos -->
+                                <div v-if="log.media && log.media.filter(x => x.kind === 'voice_memo').length > 0" class="mt-2">
+                                    <p
+                                        class="mb-2 text-[9px] font-bold uppercase tracking-widest text-slate-500"
+                                    >
+                                        Voice Memos
+                                    </p>
+                                    <div class="space-y-1.5">
+                                        <div v-for="m in log.media.filter(x => x.kind === 'voice_memo')" :key="m.id" class="rounded-xl border border-slate-800 bg-slate-900/60 p-2">
+                                            <audio :src="m.file_url" controls class="h-8 w-full max-w-xs text-xs"></audio>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Signatures -->
+                                <div v-if="log.media && log.media.filter(x => x.kind === 'signature').length > 0" class="mt-2">
+                                    <p
+                                        class="mb-2 text-[9px] font-bold uppercase tracking-widest text-slate-500"
+                                    >
+                                        Signature
+                                    </p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <img
+                                            v-for="m in log.media.filter(
+                                                (x) => x.kind === 'signature',
+                                            )"
+                                            :key="m.id"
+                                            :src="m.file_url"
+                                            class="h-16 w-24 rounded-xl border border-slate-800 bg-white object-contain p-1"
                                             loading="lazy"
                                         />
                                     </div>

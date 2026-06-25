@@ -1122,7 +1122,7 @@ function getPriorityClass(priority: string) {
                                     v-if="
                                         log.media &&
                                         log.media.filter(
-                                            (m) => m.kind !== 'signature',
+                                            (m) => m.kind === 'photo',
                                         ).length > 0
                                     "
                                     class="mt-1 space-y-1.5 border-t border-slate-200/50 pt-1.5"
@@ -1134,7 +1134,7 @@ function getPriorityClass(priority: string) {
                                     <div class="mt-1 flex flex-wrap gap-2">
                                         <a
                                             v-for="m in log.media.filter(
-                                                (m) => m.kind !== 'signature',
+                                                (m) => m.kind === 'photo',
                                             )"
                                             :key="m.id"
                                             :href="m.file_url"
@@ -1147,6 +1147,33 @@ function getPriorityClass(priority: string) {
                                                 class="h-full w-full object-cover"
                                             />
                                         </a>
+                                    </div>
+                                </div>
+
+                                <!-- Scanned Voice Memos -->
+                                <div
+                                    v-if="
+                                        log.media &&
+                                        log.media.filter(
+                                            (m) => m.kind === 'voice_memo',
+                                        ).length > 0
+                                    "
+                                    class="mt-1 space-y-1.5 border-t border-slate-200/50 pt-1.5"
+                                >
+                                    <span
+                                        class="text-slate-450 block font-mono text-[8px] font-black uppercase tracking-wider"
+                                        >Voice Memos:</span
+                                    >
+                                    <div class="mt-1 space-y-1.5">
+                                        <div
+                                            v-for="m in log.media.filter(
+                                                (m) => m.kind === 'voice_memo',
+                                            )"
+                                            :key="m.id"
+                                            class="rounded-lg border border-slate-200 bg-slate-50 p-2"
+                                        >
+                                            <audio :src="m.file_url" controls class="h-8 w-full max-w-xs text-xs"></audio>
+                                        </div>
                                     </div>
                                 </div>
 
