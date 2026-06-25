@@ -57,7 +57,7 @@ export class CapacitorBridge {
         }
 
         // Standard Web Browser fallback
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve) => {
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
@@ -72,23 +72,86 @@ export class CapacitorBridge {
                             'Web Geolocation failed. Using simulated coordinates.',
                             error,
                         );
-                        // Default mock coordinates (witbo HQ Cyprus)
-                        resolve({
-                            latitude: 35.123456,
-                            longitude: 33.123456,
-                            accuracy: 10,
-                        });
+                        resolve(CapacitorBridge.getFallbackSimulatedPosition());
                     },
                     { enableHighAccuracy: true, timeout: 5000 },
                 );
             } else {
-                resolve({
-                    latitude: 35.123456,
-                    longitude: 33.123456,
-                    accuracy: 10,
-                });
+                resolve(CapacitorBridge.getFallbackSimulatedPosition());
             }
         });
+    }
+
+    /**
+     * Dynamically retrieve simulated fallback coordinates from cached active patrol session
+     * or cached assigned routes to avoid hardcoding coordinates.
+     */
+    private static getFallbackSimulatedPosition(): GpsPosition {
+        try {
+            const cachedPatrol = localStorage.getItem('patrol_active_session');
+            if (cachedPatrol) {
+                const patrol = JSON.parse(cachedPatrol);
+                const logs =
+                    patrol.checkpoint_logs || patrol.checkpointLogs || [];
+                if (logs.length > 0) {
+                    // Try to find the first pending checkpoint
+                    const pending = logs.find(
+                        (l: any) =>
+                            l.status === 'pending' ||
+                            l.status === 'out_of_order_attempt',
+                    );
+                    const targetLog = pending || logs[0];
+                    if (
+                        targetLog.checkpoint &&
+                        typeof targetLog.checkpoint.latitude === 'number'
+                    ) {
+                        return {
+                            latitude: targetLog.checkpoint.latitude,
+                            longitude: targetLog.checkpoint.longitude,
+                            accuracy: 15,
+                        };
+                    }
+                }
+            }
+        } catch (e) {
+            console.error(
+                'Failed to parse active patrol session for mock coordinates:',
+                e,
+            );
+        }
+
+        try {
+            const cachedRoutes = localStorage.getItem('patrol_cached_routes');
+            if (cachedRoutes) {
+                const routes = JSON.parse(cachedRoutes);
+                if (
+                    routes.length > 0 &&
+                    routes[0].route_checkpoints &&
+                    routes[0].route_checkpoints.length > 0
+                ) {
+                    const firstCp = routes[0].route_checkpoints[0].checkpoint;
+                    if (firstCp && typeof firstCp.latitude === 'number') {
+                        return {
+                            latitude: firstCp.latitude,
+                            longitude: firstCp.longitude,
+                            accuracy: 15,
+                        };
+                    }
+                }
+            }
+        } catch (e) {
+            console.error(
+                'Failed to parse cached routes for mock coordinates:',
+                e,
+            );
+        }
+
+        // Absolute fallback (default Limassol Marina coordinates)
+        return {
+            latitude: 34.671234,
+            longitude: 33.041234,
+            accuracy: 15,
+        };
     }
 
     /**
