@@ -585,6 +585,43 @@ async function startScan(method: 'qr' | 'nfc') {
         return;
     }
 
+    // GPS Geofence validation
+    if (activeLog.checkpoint.gps_required) {
+        const gps = await updateLocation();
+        if (!gps) {
+            alert(
+                'GPS coordinates are required to verify your location for this checkpoint.',
+            );
+            return;
+        }
+
+        if (
+            activeLog.checkpoint.latitude !== undefined &&
+            activeLog.checkpoint.longitude !== undefined &&
+            activeLog.checkpoint.latitude !== null &&
+            activeLog.checkpoint.longitude !== null
+        ) {
+            const distance = calculateDistanceMetres(
+                gps.latitude,
+                gps.longitude,
+                Number(activeLog.checkpoint.latitude),
+                Number(activeLog.checkpoint.longitude),
+            );
+
+            if (distance > activeLog.checkpoint.gps_fence_radius) {
+                alert(
+                    `You are outside the required GPS geofence for this checkpoint.\nDistance: ${Math.round(distance)}m (Limit: ${activeLog.checkpoint.gps_fence_radius}m).`,
+                );
+                return;
+            }
+        } else {
+            alert(
+                'Checkpoint coordinates are missing. Cannot verify GPS location.',
+            );
+            return;
+        }
+    }
+
     // Signature required validation
     let sigData = null;
     if (activeLog.checkpoint.signature_required) {
@@ -988,6 +1025,29 @@ function base64ToFile(base64Data: string, filename: string): File {
         u8arr[n] = bstr.charCodeAt(n);
     }
     return new File([u8arr], filename, { type: mime });
+}
+
+function calculateDistanceMetres(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+): number {
+    const R = 6371e3; // Earth radius in metres
+    const phi1 = (lat1 * Math.PI) / 180;
+    const phi2 = (lat2 * Math.PI) / 180;
+    const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+    const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a =
+        Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+        Math.cos(phi1) *
+            Math.cos(phi2) *
+            Math.sin(deltaLambda / 2) *
+            Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // in metres
 }
 
 // Scan processing with real code verification

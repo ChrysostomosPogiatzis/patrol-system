@@ -286,6 +286,12 @@ class PatrolController extends Controller
             $withinFence = false;
         }
 
+        if ($checkpoint->gps_required && !$withinFence) {
+            return response()->json([
+                'message' => 'You are outside the required GPS geofence for this checkpoint.',
+            ], 422);
+        }
+
         // Update the log entry
         $log->update([
             'status' => 'scanned',
