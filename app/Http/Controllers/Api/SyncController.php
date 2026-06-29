@@ -27,8 +27,8 @@ class SyncController extends Controller
     {
         $request->validate([
             'queue' => 'required|array',
-            'queue.*.entity_type' => 'required|in:patrol_checkpoint_log,incident,checkpoint_media,guard_location_ping',
-            'queue.*.entity_id' => 'required|string', // local client UUID
+            'queue.*.entity_type' => 'required|in:patrol,patrol_complete,patrol_checkpoint_log,incident,checkpoint_media,guard_location_ping',
+            'queue.*.entity_id' => 'required|string',
             'queue.*.payload' => 'required|array',
             'queue.*.captured_at' => 'required|date',
         ]);
@@ -36,11 +36,23 @@ class SyncController extends Controller
         $guard = $request->user();
         $results = [];
 
-        foreach ($request->queue as $item) {
+        // Sort items: 'patrol' goes first so patrols are created and mapped before scans/media reference them.
+        $sortedQueue = collect($request->queue)->sortBy(function ($item) {
+            return $item['entity_type'] === 'patrol' ? 0 : 1;
+        })->all();
+
+        $patrolIdMap = [];
+
+        foreach ($sortedQueue as $item) {
             $entityType = $item['entity_type'];
             $entityId = $item['entity_id'];
             $payload = $item['payload'];
             $capturedAt = $item['captured_at'];
+
+            // Translate client-side temporary patrol_id if mapped
+            if (isset($payload['patrol_id']) && isset($patrolIdMap[$payload['patrol_id']])) {
+                $payload['patrol_id'] = $patrolIdMap[$payload['patrol_id']];
+            }
 
             // Validate that the patrol_id actually exists to prevent foreign key violations
             $patrolId = null;
@@ -56,7 +68,7 @@ class SyncController extends Controller
                 'guard_id' => $guard->id,
                 'patrol_id' => $patrolId,
                 'entity_type' => $entityType,
-                'entity_id' => null, // local ID can map elsewhere
+                'entity_id' => null,
                 'payload' => $payload,
                 'state' => 'syncing',
                 'captured_at' => $capturedAt,
@@ -65,6 +77,17 @@ class SyncController extends Controller
 
             try {
                 switch ($entityType) {
+                    case 'patrol':
+                        $realPatrolId = $this->processOfflinePatrol($payload, $guard, $capturedAt);
+                        if (isset($payload['patrol_id'])) {
+                            $patrolIdMap[$payload['patrol_id']] = $realPatrolId;
+                        }
+                        break;
+
+                    case 'patrol_complete':
+                        $this->processOfflinePatrolComplete($payload, $guard, $capturedAt);
+                        break;
+
                     case 'patrol_checkpoint_log':
                         $this->processOfflineScan($payload, $guard, $capturedAt);
                         break;
@@ -85,6 +108,7 @@ class SyncController extends Controller
                 $syncRecord->update([
                     'state' => 'synced',
                     'synced_at' => now(),
+                    'patrol_id' => $syncRecord->patrol_id ?: ($patrolIdMap[$payload['patrol_id'] ?? ''] ?? null),
                 ]);
 
                 $results[] = [
@@ -332,5 +356,94 @@ class SyncController extends Controller
         $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
 
         return $earthRadius * $c;
+    }
+
+    /**
+     * Process an offline patrol starting event.
+     */
+    private function processOfflinePatrol(array $payload, Guard $guard, string $capturedAt): int
+    {
+        $routeId = $payload['route_id'] ?? null;
+        $route = Route::where('id', $routeId)->where('is_active', true)->first();
+
+        if (!$route) {
+            throw new \Exception("Active route {$routeId} not found.");
+        }
+
+        // Initialize offline patrol record
+        $patrol = Patrol::create([
+            'tenant_id' => $guard->tenant_id,
+            'route_id' => $route->id,
+            'guard_id' => $guard->id,
+            'status' => 'in_progress',
+            'started_at' => $payload['started_at'] ?? $capturedAt,
+            'total_checkpoints' => RouteCheckpoint::where('route_id', $route->id)->count(),
+            'completed_checkpoints' => 0,
+            'skipped_checkpoints' => 0,
+            'incident_count' => 0,
+            'was_offline' => true,
+        ]);
+
+        $routeCheckpoints = RouteCheckpoint::where('route_id', $route->id)->orderBy('position')->get();
+        foreach ($routeCheckpoints as $rc) {
+            PatrolCheckpointLog::create([
+                'tenant_id' => $guard->tenant_id,
+                'patrol_id' => $patrol->id,
+                'route_checkpoint_id' => $rc->id,
+                'checkpoint_id' => $rc->checkpoint_id,
+                'guard_id' => $guard->id,
+                'status' => 'pending',
+                'position' => $rc->position,
+                'recorded_offline' => true,
+            ]);
+        }
+
+        return $patrol->id;
+    }
+
+    /**
+     * Process an offline patrol completion event.
+     */
+    private function processOfflinePatrolComplete(array $payload, Guard $guard, string $capturedAt): void
+    {
+        $patrolId = $payload['patrol_id'] ?? null;
+        $patrol = Patrol::where('id', $patrolId)->where('tenant_id', $guard->tenant_id)->first();
+
+        if (!$patrol) {
+            throw new \Exception("Patrol {$patrolId} not found for offline completion.");
+        }
+
+        $patrol->update([
+            'status' => 'completed',
+            'completed_at' => $payload['completed_at'] ?? $capturedAt,
+            'completion_latitude' => $payload['completion_latitude'] ?? null,
+            'completion_longitude' => $payload['completion_longitude'] ?? null,
+            'general_note' => $payload['general_note'] ?? null,
+        ]);
+
+        $sigBase64 = $payload['signature_base64'] ?? '';
+        if ($sigBase64 && strlen($sigBase64) > 1500) {
+            $decoded = base64_decode(explode(',', $sigBase64)[1] ?? $sigBase64);
+            $filename = uniqid() . '_completion_signature.png';
+            $path = "tenants/{$guard->tenant_id}/patrols/{$patrol->id}/signatures/{$filename}";
+            Storage::disk('public')->put($path, $decoded);
+
+            CheckpointMedia::create([
+                'tenant_id' => $guard->tenant_id,
+                'patrol_checkpoint_log_id' => null,
+                'patrol_id' => $patrol->id,
+                'guard_id' => $guard->id,
+                'kind' => 'signature',
+                'file_url' => asset('storage/' . $path),
+                'file_key' => $path,
+                'file_size_bytes' => strlen($decoded),
+                'mime_type' => 'image/png',
+                'captured_at' => $capturedAt,
+                'capture_latitude' => $payload['completion_latitude'] ?? null,
+                'capture_longitude' => $payload['completion_longitude'] ?? null,
+                'recorded_offline' => true,
+                'synced_at' => now(),
+            ]);
+        }
     }
 }

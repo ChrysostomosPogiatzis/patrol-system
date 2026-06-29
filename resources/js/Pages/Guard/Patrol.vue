@@ -357,6 +357,7 @@ const showNfcManualInput = ref(false);
 const nfcManualCode = ref('');
 const currentSigData = ref<string | null>(null);
 let ndefAbortController: AbortController | null = null;
+const cachedGpsForScan = ref<{ latitude: number; longitude: number; accuracy: number } | null>(null);
 
 // Initialize signature drawing
 function initSignature(canvas: HTMLCanvasElement | null) {
@@ -589,8 +590,9 @@ async function startScan(method: 'qr' | 'nfc') {
     }
 
     // GPS Geofence validation
+    let gps = null;
     if (activeLog.checkpoint.gps_required) {
-        const gps = await updateLocation();
+        gps = await updateLocation();
         if (!gps) {
             alert(
                 'GPS coordinates are required to verify your location for this checkpoint.',
@@ -623,7 +625,10 @@ async function startScan(method: 'qr' | 'nfc') {
             );
             return;
         }
+    } else {
+        gps = currentPosition.value || await updateLocation();
     }
+    cachedGpsForScan.value = gps;
 
     // Signature required validation
     let sigData = null;
@@ -1314,8 +1319,8 @@ async function executeScan(
 
     currentLoadingId.value = log.id;
 
-    // Retrieve device location
-    const gps = await updateLocation();
+    // Retrieve device location from cached GPS or fallback
+    const gps = cachedGpsForScan.value || currentPosition.value;
     const lat = gps ? gps.latitude : 34.6712;
     const lon = gps ? gps.longitude : 33.0412;
 
@@ -1345,39 +1350,17 @@ async function executeScan(
 
     if (isOnline.value) {
         try {
-            const formData = new FormData();
-            formData.append('scan_method', method);
-            formData.append('latitude', lat.toString());
-            formData.append('longitude', lon.toString());
-            formData.append('scanned_code', scannedCode);
-            formData.append('battery_pct', batteryLevel.toString());
-            if (checkpointNote.value) {
-                formData.append('note', checkpointNote.value);
-            }
-            if (checkpointPhoto.value) {
-                const photoFile = base64ToFile(
-                    checkpointPhoto.value,
-                    'checkpoint_photo.jpg',
-                );
-                formData.append('media_file', photoFile);
-            }
-            if (checkpointVoiceBlob.value) {
-                const voiceFile = new File(
-                    [checkpointVoiceBlob.value],
-                    'checkpoint_voice.wav',
-                    { type: 'audio/wav' },
-                );
-                formData.append('voice_file', voiceFile);
-            }
-            if (signatureBase64) {
-                const sigFile = base64ToFile(signatureBase64, 'signature.png');
-                formData.append('signature_file', sigFile);
-            }
-
+            // Post metadata only
             await axios.post(
                 `/api/guard/patrols/${props.activePatrol.id}/checkpoints/${log.route_checkpoint_id}/scan`,
-                formData,
-                { headers: { 'Content-Type': 'multipart/form-data' } },
+                {
+                    scan_method: method,
+                    latitude: lat,
+                    longitude: lon,
+                    note: checkpointNote.value || null,
+                    scanned_code: scannedCode,
+                    battery_pct: batteryLevel,
+                }
             );
 
             log.status = 'scanned';
@@ -1385,6 +1368,9 @@ async function executeScan(
             log.scan_method_used = method;
             log.note = checkpointNote.value;
             emit('checkpoint-scanned');
+
+            // Asynchronously background heavy media file sync
+            queueScanMediaBackground(log, lat, lon, signatureBase64);
 
             alert(
                 `✅ SUCCESS: Checkpoint "${log.checkpoint.name}" scanned successfully.`,
@@ -1402,8 +1388,57 @@ async function executeScan(
     deleteVoiceRecording();
     clearSignature(sigCanvasRefs.value[log.id]);
     currentLoadingId.value = null;
+    cachedGpsForScan.value = null;
     saveLogsCache();
     checkPatrolCompletion();
+}
+
+async function queueScanMediaBackground(
+    log: CheckpointLog,
+    lat: number,
+    lon: number,
+    signatureBase64: string | null,
+) {
+    if (checkpointPhoto.value) {
+        addToQueue('checkpoint_media', {
+            patrol_checkpoint_log_id: log.id,
+            base64_data: checkpointPhoto.value.split(',')[1],
+            filename: 'checkpoint_photo.jpg',
+            kind: 'photo',
+            mime_type: 'image/jpeg',
+            latitude: lat,
+            longitude: lon,
+        });
+    }
+
+    if (checkpointVoiceBlob.value) {
+        try {
+            const base64Audio = await blobToBase64(checkpointVoiceBlob.value);
+            addToQueue('checkpoint_media', {
+                patrol_checkpoint_log_id: log.id,
+                base64_data: base64Audio,
+                filename: 'checkpoint_voice.wav',
+                kind: 'voice_memo',
+                mime_type: 'audio/wav',
+                latitude: lat,
+                longitude: lon,
+            });
+        } catch (err) {
+            console.error('Failed to convert voice memo for background sync:', err);
+        }
+    }
+
+    if (signatureBase64) {
+        addToQueue('checkpoint_media', {
+            patrol_checkpoint_log_id: log.id,
+            base64_data: signatureBase64.split(',')[1],
+            filename: 'signature.png',
+            kind: 'signature',
+            mime_type: 'image/png',
+            latitude: lat,
+            longitude: lon,
+        });
+    }
 }
 
 async function queueOfflineScan(
@@ -1417,37 +1452,7 @@ async function queueOfflineScan(
     payload.route_checkpoint_id = log.route_checkpoint_id;
     addToQueue('patrol_checkpoint_log', payload);
 
-    if (checkpointPhoto.value) {
-        addToQueue('checkpoint_media', {
-            patrol_checkpoint_log_id: log.id,
-            base64_data: checkpointPhoto.value.split(',')[1],
-            filename: 'checkpoint_photo.jpg',
-            kind: 'photo',
-            mime_type: 'image/jpeg',
-            latitude: payload.latitude,
-            longitude: payload.longitude,
-        });
-    }
-
-    if (checkpointVoiceBlob.value) {
-        try {
-            const base64Audio = await blobToBase64(checkpointVoiceBlob.value);
-            addToQueue('checkpoint_media', {
-                patrol_checkpoint_log_id: log.id,
-                base64_data: base64Audio,
-                filename: 'checkpoint_voice.wav',
-                kind: 'voice_memo',
-                mime_type: 'audio/wav',
-                latitude: payload.latitude,
-                longitude: payload.longitude,
-            });
-        } catch (err) {
-            console.error(
-                'Failed to convert checkpoint voice blob to base64:',
-                err,
-            );
-        }
-    }
+    await queueScanMediaBackground(log, payload.latitude, payload.longitude, signatureBase64);
 
     log.status = 'scanned';
     log.scanned_at = new Date().toISOString();
@@ -1574,65 +1579,19 @@ async function handleCompletePatrol() {
     const lat = gps ? gps.latitude : null;
     const lon = gps ? gps.longitude : null;
 
-    if (isOnline.value) {
-        try {
-            const formData = new FormData();
-            if (generalNote.value) {
-                formData.append('general_note', generalNote.value);
-            }
-            if (lat) {
-                formData.append('completion_latitude', lat.toString());
-            }
-            if (lon) {
-                formData.append('completion_longitude', lon.toString());
-            }
-            if (sigData && sigData.length > 1500) {
-                const sigFile = base64ToFile(
-                    sigData,
-                    'completion_signature.png',
-                );
-                formData.append('completion_signature', sigFile);
-            }
-
-            await axios.post(
-                `/api/guard/patrols/${props.activePatrol.id}/complete`,
-                formData,
-                {
-                    headers: { 'Content-Type': 'multipart/form-data' },
-                },
-            );
-
-            localStorage.removeItem(`patrol_logs_${props.activePatrol.id}`);
-            emit('patrol-completed');
-        } catch (e: any) {
-            console.error(e);
-            completionError.value =
-                e.response?.data?.message ||
-                'Failed to complete patrol session online.';
-            queueOfflineCompletion(sigData, lat, lon);
-        }
-    } else {
-        queueOfflineCompletion(sigData, lat, lon);
-    }
-}
-
-function queueOfflineCompletion(
-    signatureBase64: string | null,
-    lat: number | null,
-    lon: number | null,
-) {
-    const payload = {
+    // Queue patrol complete action in sync queue
+    addToQueue('patrol_complete', {
         patrol_id: props.activePatrol.id,
-        general_note: generalNote.value,
+        general_note: generalNote.value || null,
         completion_latitude: lat,
         completion_longitude: lon,
-        signature_base64: signatureBase64,
-    };
-    localStorage.setItem(
-        'patrol_offline_completion_pending',
-        JSON.stringify(payload),
-    );
+        signature_base64: sigData,
+        completed_at: new Date().toISOString(),
+    });
+
+    localStorage.removeItem(`patrol_logs_${props.activePatrol.id}`);
     emit('patrol-completed');
+    alert('Shift completed successfully and queued for sync!');
 }
 
 onMounted(async () => {

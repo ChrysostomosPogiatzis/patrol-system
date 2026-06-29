@@ -4,6 +4,8 @@ import { onMounted, onUnmounted, readonly, ref } from 'vue';
 
 export interface QueueItem {
     entity_type:
+        | 'patrol'
+        | 'patrol_complete'
         | 'patrol_checkpoint_log'
         | 'incident'
         | 'checkpoint_media'

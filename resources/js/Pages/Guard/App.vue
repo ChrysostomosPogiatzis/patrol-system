@@ -19,7 +19,7 @@ const activePatrol = ref<any>(null);
 const activeSos = ref<any>(null);
 const isLoading = ref(true);
 
-const { isOnline, queue, triggerSync } = useOfflineSync();
+const { isOnline, queue, triggerSync, addToQueue } = useOfflineSync();
 const { startTracking, stopTracking } = useGeolocation();
 
 // Verify and fetch guard profile
@@ -150,11 +150,61 @@ function handleLogout() {
 }
 
 // Start Patrol session
+// Start Patrol session
 async function handleStartPatrol(routeId: number) {
     if (!isOnline.value) {
-        alert(
-            'You must have active internet coverage to initialize a new patrol shift.',
-        );
+        // Full offline starting capability
+        try {
+            const cachedRoutesStr = localStorage.getItem('patrol_cached_routes');
+            const routesList = cachedRoutesStr ? JSON.parse(cachedRoutesStr) : [];
+            const route = routesList.find((r: any) => r.id === routeId);
+            if (!route) {
+                alert('Route details are not cached. You must go online once to cache routes.');
+                return;
+            }
+
+            const tempPatrolId = -1 * Date.now(); // client temporary ID
+            const checkpointLogs = (route.route_checkpoints || []).map((rc: any) => ({
+                id: -1 * Math.floor(Math.random() * 1000000) - 1,
+                route_checkpoint_id: rc.id,
+                checkpoint_id: rc.checkpoint.id,
+                status: 'pending',
+                position: rc.position,
+                checkpoint: rc.checkpoint,
+            }));
+
+            const mockPatrol = {
+                id: tempPatrolId,
+                route_id: routeId,
+                guard_id: guard.value?.id,
+                status: 'in_progress',
+                started_at: new Date().toISOString(),
+                completed_checkpoints: 0,
+                total_checkpoints: checkpointLogs.length,
+                skipped_checkpoints: 0,
+                incident_count: 0,
+                route: route,
+                checkpoint_logs: checkpointLogs,
+            };
+
+            activePatrol.value = mockPatrol;
+            localStorage.setItem('patrol_active_session', JSON.stringify(mockPatrol));
+            localStorage.setItem(`patrol_logs_${tempPatrolId}`, JSON.stringify(checkpointLogs));
+
+            // Queue patrol start event in sync queue
+            addToQueue('patrol', {
+                patrol_id: tempPatrolId,
+                route_id: routeId,
+                started_at: mockPatrol.started_at,
+            });
+
+            startTracking(tempPatrolId);
+            currentTab.value = 'patrol';
+            alert('Shift started offline. All scans will sync automatically once online coverage returns.');
+        } catch (err: any) {
+            console.error('Failed to start patrol offline:', err);
+            alert('Failed to initialize patrol offline: ' + err.message);
+        }
         return;
     }
 
@@ -280,66 +330,6 @@ function handleSosResolved() {
 watch(isOnline, async (nextOnline) => {
     if (nextOnline) {
         await triggerSync();
-
-        // Check if there was an offline completion pending
-        const pendingCompletion = localStorage.getItem(
-            'patrol_offline_completion_pending',
-        );
-        if (pendingCompletion) {
-            try {
-                const details = JSON.parse(pendingCompletion);
-
-                const formData = new FormData();
-                if (details.general_note) {
-                    formData.append('general_note', details.general_note);
-                }
-                if (details.completion_latitude) {
-                    formData.append(
-                        'completion_latitude',
-                        details.completion_latitude.toString(),
-                    );
-                }
-                if (details.completion_longitude) {
-                    formData.append(
-                        'completion_longitude',
-                        details.completion_longitude.toString(),
-                    );
-                }
-
-                if (
-                    details.signature_base64 &&
-                    details.signature_base64.length > 1500
-                ) {
-                    const arr = details.signature_base64.split(',');
-                    const mime = arr[0].match(/:(.*?);/)![1];
-                    const bstr = atob(arr[1]);
-                    let n = bstr.length;
-                    const u8arr = new Uint8Array(n);
-                    while (n--) {
-                        u8arr[n] = bstr.charCodeAt(n);
-                    }
-                    const sigFile = new File(
-                        [u8arr],
-                        'completion_signature.png',
-                        { type: mime },
-                    );
-                    formData.append('completion_signature', sigFile);
-                }
-
-                await axios.post(
-                    `/api/guard/patrols/${details.patrol_id}/complete`,
-                    formData,
-                    {
-                        headers: { 'Content-Type': 'multipart/form-data' },
-                    },
-                );
-
-                localStorage.removeItem('patrol_offline_completion_pending');
-                console.log('Pending offline patrol completion synced.');
-            } catch (e) {
-                console.error('Failed to sync pending offline completion:', e);
-            }
-        }
     }
 });
 
